@@ -1,5 +1,7 @@
 package cr.controles.pagos;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.webkit.JsResult;
 import android.Manifest;
 import android.os.Build;
 import android.content.pm.PackageManager;
@@ -44,7 +46,28 @@ public class MainActivity extends Activity {
     web.getSettings().setAllowFileAccess(false);
     web.getSettings().setAllowContentAccess(false);
     web.setWebViewClient(new WebViewClient());
-    web.setWebChromeClient(new WebChromeClient());
+    web.setWebChromeClient(new WebChromeClient(){
+      // Los diálogos estándar del WebView muestran «JavaScript»; usamos la identidad de PagoCheck IA.
+      @Override public boolean onJsAlert(WebView view,String url,String message,JsResult result){
+        new AlertDialog.Builder(MainActivity.this)
+          .setTitle("PagoCheck IA · Atención")
+          .setMessage(message)
+          .setPositiveButton("Entendido",(dialog,which)->result.confirm())
+          .setOnCancelListener(dialog->result.cancel())
+          .show();
+        return true;
+      }
+      @Override public boolean onJsConfirm(WebView view,String url,String message,JsResult result){
+        new AlertDialog.Builder(MainActivity.this)
+          .setTitle("PagoCheck IA · Confirmación")
+          .setMessage(message)
+          .setPositiveButton("Confirmar",(dialog,which)->result.confirm())
+          .setNegativeButton("Cancelar",(dialog,which)->result.cancel())
+          .setOnCancelListener(dialog->result.cancel())
+          .show();
+        return true;
+      }
+    });
     web.addJavascriptInterface(new VoiceBridge(),"AndroidAI");
     web.addJavascriptInterface(new BackupBridge(),"AndroidBackup");
     web.addJavascriptInterface(new ReminderBridge(),"AndroidReminders");
