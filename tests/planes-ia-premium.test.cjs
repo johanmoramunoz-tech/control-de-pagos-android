@@ -36,7 +36,7 @@ test('Premium de evaluación abre cámara y reconocimiento de voz',()=>{
  assert.match(c.premiumRibbon('budgets'),/Usar IA/);
 });
 test('la compra no se presenta como activa ni como plan de pago funcional',()=>{
- assert.match(js,/Compra Premium — próximamente/);
- assert.match(js,/no se realiza ningún cobro/i);
+ assert.match(js,/Google Play · compra única Premium/);
+ assert.match(js,/No se realizarán cargos en esta compilación/i);
  assert.match(js,/setTestPremium/);
 });
