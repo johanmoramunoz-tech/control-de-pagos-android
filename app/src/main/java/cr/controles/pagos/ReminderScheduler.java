@@ -62,7 +62,8 @@ public final class ReminderScheduler {
         long now=System.currentTimeMillis();
         for(int i=0;i<commits.length();i++){
             JSONObject c=commits.optJSONObject(i);
-            if(c==null||!"expense".equals(c.optString("kind")))continue;
+            // Los presupuestos de consumo se liquidan por compras, no con un único check mensual.
+            if(c==null||!"expense".equals(c.optString("kind"))||c.optBoolean("budgetManaged",false))continue;
             JSONObject settings=c.optJSONObject("reminders");
             if(settings==null)continue;
             for(String type:new String[]{"planned","due"}){
@@ -152,7 +153,7 @@ public final class ReminderScheduler {
         if(id==null||month==null||anchor==null)return;
         JSONObject data=parseObject(context.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(DATA,"{}"));
         JSONObject c=lookup(data,id);
-        if(c==null||!"expense".equals(c.optString("kind")))return;
+        if(c==null||!"expense".equals(c.optString("kind"))||c.optBoolean("budgetManaged",false))return;
         String end=c.optString("end","");
         if(month.compareTo(c.optString("start","0000-01"))<0||(!end.isEmpty()&&month.compareTo(end)>0))return;
         JSONObject reminders=c.optJSONObject("reminders");
