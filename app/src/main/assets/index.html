@@ -169,92 +169,7 @@ function openFree(source){
  $('f_kind').onchange=()=>{$('catContainer').innerHTML=$('f_kind').value==='transfer'?'<p class="muted">Sin cambio en el saldo total de tus cuentas.</p>':categorySelect($('f_kind').value,'')};
 }
 function openVoice(){if(locked())return;popup('Dictado o escritura de gasto',`<p class="muted">En el APK, pulsa Dictar con Android para reconocer la voz. También puedes escribir «registra 25000 colones de combustible». La categoría se deduce con reglas básicas locales, no mediante IA.</p><button class="button outline" type="button" onclick="startNativeVoice()">🎙 Dictar con Android</button>`+field('phrase','Instrucción reconocida o escrita','text','','required maxlength="220"'),()=>{const p=$('f_phrase').value.trim(),match=p.match(/(\d[\d.,\s]*)\s*(?:colones|₡)?/i);if(!match){alert('No pude reconocer el monto. Usa números: 25000.');return false}let raw=match[1].replace(/[^\d]/g,''),amount=Number(raw);if(!Number.isInteger(amount)||amount<=0||amount>1e9){alert('Monto inválido.');return false}const desc=p.toLowerCase().includes('combustible')?'Combustible':p.toLowerCase().includes('aliment')?'Alimentación':'Gasto por voz';return addTx({kind:'expense',description:desc,amount,date:today(),category:desc==='Combustible'?'Transporte':desc==='Alimentación'?'Alimentación':'Otros',source:'voice',author:'Usuario local',note:'Texto proporcionado: '+p.slice(0,150),commitmentId:null})})}
-function startNativeVoice(){if(window.AndroidAI?.startSpeechRecognition){window.AndroidAI.startSpeechRecognition()}else{alert('Dictado nativo disponible solo en el APK. En el navegador, escribe la instrucción.') }} function receiveVoiceTranscript(v){const el=document.getElementById('f_phrase');if(el)el.value=String(v).slice(0,220);const ia=$('aiInstruction');if(ia&&tab==='ai'){ia.value=String(v).slice(0,500);sendAIText()}}
-
-let aiState={configured:false,provider:''};
-let aiDocumentMode=false;
-function receiveAIState(v){
- try{const j=JSON.parse(v);aiState={configured:!!j.configured,provider:j.provider||''};}
- catch(e){aiState={configured:false,provider:''};}
- const el=$('aiState');
- if(el)el.innerHTML=aiState.configured?'<p class="positive">✓ API '+safe(aiState.provider)+' configurada en este teléfono.</p>':'<p class="muted">No hay ninguna clave API configurada.</p>';
-}
-function aiNotice(text,bad=false){
- const el=$('aiNotice');if(el){el.textContent=String(text);el.style.color=bad?'#aa2637':'#476a83';}
- else alert(text);
-}
-function receiveAIMessage(v){aiNotice(v);window.AndroidBYOK?.status?.();}
-function receiveAIError(v){aiNotice('No se pudo interpretar: '+v,true);}
-function sendAIText(){
- if(!window.AndroidBYOK){aiNotice('Solo funciona en el APK Android.',true);return}
- if(!aiState.configured){aiNotice('Primero configura una clave API válida.',true);return}
- const v=$('aiInstruction')?.value?.trim();
- if(!v){aiNotice('Escribe o dicta una instrucción.',true);return}
- aiDocumentMode=false;aiNotice('Consultando al proveedor de IA...');
- window.AndroidBYOK.analyze(v);
-}
-function receiveAIProposal(json){
- let result;
- try{result=JSON.parse(json)}catch(e){return receiveAIError('Respuesta incompleta.')}
- const amount=Number(result.amount),currency=String(result.currency||'').toUpperCase();
- const kind=result.kind==='income'?'income':'expense';
- if(!Number.isSafeInteger(amount)||amount<=0||amount>1e9)return receiveAIError('El proveedor no identificó un monto único verificable. Registra manualmente.');
- if(currency!=='CRC'&&currency!=='COLONES')return receiveAIError('La moneda identificada es '+currency+'. Esta versión solo registra colones; no se realizará conversión automática.');
- const desc=String(result.description||'').trim();
- if(!desc)return receiveAIError('Falta descripción del movimiento.');
- const categories=categoryList(kind);
- const suggested=categories.find(c=>c.name.toLowerCase()===String(result.category||'').toLowerCase())?.name||categories[0]?.name||'';
- if(!suggested)return receiveAIError('Primero crea una categoría de '+(kind==='income'?'ingresos':'egresos')+'.');
- const day=/^\d{4}-\d{2}-\d{2}$/.test(result.date||'')?result.date:today();
- const linked=result.paidEvidence==='confirmed';
- const hint='Origen: '+safe(result.provider||'IA')+' · Estado del documento: '+(linked?'Indicios de pago':'Pago NO demostrado')+'. '+safe(result.note||'');
- popup('Revisar propuesta de IA',
- '<p class="muted">Los datos se extrajeron por IA y pueden contener errores. Confirma manualmente que el pago realmente ocurrió. No se guardará una factura solamente por existir.</p>'+
- field('description','Concepto','text',desc,'required maxlength="100"')+
- field('amount','Monto real en colones (₡)','number',amount,'required min="1" max="1000000000" step="1"')+
- field('date','Fecha real','date',day,'required')+
- '<div class="formrow"><label for="f_category">Categoría</label><select id="f_category">'+categories.map(c=>'<option value="'+safe(c.name)+'" '+(c.name===suggested?'selected':'')+'>'+safe(c.icon)+' '+safe(c.name)+'</option>').join('')+'</select></div>'+
- '<div class="formrow"><label for="f_paid">¿Confirmas que este movimiento realmente ocurrió?</label><select id="f_paid"><option value="no">No, no registrar aún</option><option value="yes">Sí, confirmo el movimiento real</option></select></div>'+
- field('note','Nota','text',String(result.note||'').slice(0,150),'maxlength="200"')+
- '<p class="muted">'+hint+'</p>',
- ()=>{
- const amount=Number($('f_amount').value),date=$('f_date').value,description=$('f_description').value.trim(),category=$('f_category').value;
- if($('f_paid').value!=='yes'){alert('Para registrar como movimiento real debes confirmar su ejecución.');return false}
- if(!Number.isSafeInteger(amount)||amount<=0||amount>1e9||!description||!category||! /^\d{4}-\d{2}-\d{2}$/.test(date)){alert('Revisa monto, descripción, fecha y categoría.');return false}
- if(date.slice(0,7)!==month){alert('Selecciona primero el mes '+date.slice(0,7)+' en la pantalla principal. No se registró nada.');return false}
- if(locked())return false;
- if(db.transactions.some(t=>!t.reversed&&t.date===date&&t.kind===kind&&t.amount===amount&&String(t.description).trim().toLowerCase()===description.toLowerCase())&&!confirm('Existe un movimiento similar en esa fecha. ¿Registrar de todos modos?'))return false;
- const source=aiDocumentMode?'ai-image':'ai-text';
- return addTx({kind,description,amount,date,month:date.slice(0,7),category,source,author:'Usuario local',
-   note:($('f_note').value.trim()+' · IA '+String(result.provider||'')+' · confirmado por usuario').slice(0,200),
-   commitmentId:null,verification:'user_confirmed',aiProvider:String(result.provider||'')});
- });
-}
-function bindAI(){
- if($('saveAiKey'))$('saveAiKey').onclick=()=>{
-   const v=$('aiSecret').value;
-   if(!v){aiNotice('Introduce la clave API.',true);return}
-   if(!window.AndroidBYOK){aiNotice('La configuración solo funciona en Android.',true);return}
-   window.AndroidBYOK.save($('aiProvider').value,v);
-   $('aiSecret').value='';
-   aiNotice('Guardando clave cifrada...');
- };
- if($('clearAiKey'))$('clearAiKey').onclick=()=>{
-   if(confirm('¿Borrar la clave API guardada en este teléfono?'))window.AndroidBYOK?.clear?.();
- };
- if($('aiText'))$('aiText').onclick=sendAIText;
- if($('aiPicture'))$('aiPicture').onclick=()=>{
-   if(!aiState.configured){aiNotice('Configura tu API primero.',true);return}
-   aiDocumentMode=true;aiNotice('Selecciona una imagen; será enviada al proveedor seleccionado.');
-   window.AndroidBYOK?.chooseImage?.();
- };
- if($('aiDictate'))$('aiDictate').onclick=()=>{
-   if(!window.AndroidAI){aiNotice('Usa el APK Android para dictar.',true);return}
-   window.AndroidAI.startSpeechRecognition();
- };
- receiveAIState(JSON.stringify(aiState));
-}
-
+function startNativeVoice(){if(window.AndroidAI?.startSpeechRecognition){window.AndroidAI.startSpeechRecognition()}else{alert('Dictado nativo disponible solo en el APK. En el navegador, escribe la instrucción.') }} function receiveVoiceTranscript(v){const el=document.getElementById('f_phrase');if(el)el.value=String(v).slice(0,220)}
 
 let localStatus={available:false,preview:false,billingActive:false};
 function receiveLocalStatus(json){
@@ -314,5 +229,5 @@ function reverse(id){if(locked())return;const t=db.transactions.find(x=>x.id===i
 function exportData(){let content=JSON.stringify(db,null,2);if(window.AndroidBackup?.exportData){window.AndroidBackup.exportData(content);return}const blob=new Blob([content],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='pagocheck-ia-v12-respaldo.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000)}
 function receiveBackup(content){try{const v=JSON.parse(content);if(!v||![4,6,9,10].includes(v.schema)||!Array.isArray(v.commitments)||!Array.isArray(v.transactions)||!Array.isArray(v.audit)||typeof v.monthClosed!=='object'||JSON.stringify(v).length>5000000)throw Error('Formato incompatible');if(!confirm('¿Reemplazar todos los datos locales con el respaldo?'))return;db=v;migrate();if(!persist())throw Error('No fue posible guardar');render();alert('Importación realizada')}catch(e){alert('Respaldo inválido: '+e.message)}}
 function close(){callback=null;$('overlay').classList.remove('open')}function closeDialogOrBack(){if($('overlay').classList.contains('open'))close();else if(tab!=='home'){tab='home';render()}else{month=monthNow();render()}}
-$('form').onsubmit=e=>{e.preventDefault();if(callback&&callback()!==false){close();render()}};$('cancel').onclick=close;$('overlay').onclick=e=>{if(e.target===$('overlay'))close()};$('prev').onclick=()=>move(-1);$('next').onclick=()=>move(1);function move(n){const[y,m]=month.split('-').map(Number),d=new Date(y,m-1+n,1);month=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render()}document.querySelectorAll('[data-tab]').forEach(x=>x.onclick=()=>{tab=x.dataset.tab;render()});$('backupFile').onchange=async e=>{const f=e.target.files[0];if(f)receiveBackup(await f.text());e.target.value=''};render();syncAndroidReminders();window.AndroidBYOK?.status?.();if(!db.opening&&!db.commitments.length&&!db.transactions.length&&!localStorage.getItem('cp-opening-prompted')){localStorage.setItem('cp-opening-prompted','1');editOpening()}
+$('form').onsubmit=e=>{e.preventDefault();if(callback&&callback()!==false){close();render()}};$('cancel').onclick=close;$('overlay').onclick=e=>{if(e.target===$('overlay'))close()};$('prev').onclick=()=>move(-1);$('next').onclick=()=>move(1);function move(n){const[y,m]=month.split('-').map(Number),d=new Date(y,m-1+n,1);month=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render()}document.querySelectorAll('[data-tab]').forEach(x=>x.onclick=()=>{tab=x.dataset.tab;render()});$('backupFile').onchange=async e=>{const f=e.target.files[0];if(f)receiveBackup(await f.text());e.target.value=''};render();syncAndroidReminders();if(!db.opening&&!db.commitments.length&&!db.transactions.length&&!localStorage.getItem('cp-opening-prompted')){localStorage.setItem('cp-opening-prompted','1');editOpening()}
 </script></body></html>
