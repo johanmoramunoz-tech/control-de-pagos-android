@@ -16,6 +16,7 @@ import android.graphics.Color;
 import android.widget.Toast;
 import org.json.JSONObject;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import android.content.ActivityNotFoundException;
