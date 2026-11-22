@@ -1,0 +1,10 @@
+{
+  "name": "pagocheck-license-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Servicio preparatorio de validación de compras PagoCheck IA (sin despliegue)",
+  "main": "server.cjs",
+  "scripts": {"test": "node --test ../tests/billing-backend.test.cjs", "start": "node server.cjs"},
+  "engines": {"node": ">=20"},
+  "dependencies": {"firebase-admin": "^13.0.0", "google-auth-library": "^10.0.0"}
+}
