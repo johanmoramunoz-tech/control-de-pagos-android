@@ -2,14 +2,20 @@ plugins { id 'com.android.application' }
 def stableKeyPath = System.getenv('CDP_KEYSTORE_PATH')
 def stablePass = System.getenv('CDP_STORE_PASSWORD')
 android {
+ defaultConfig {
+  resValue 'string','firebase_pc_app_id', System.getenv('PC_FIREBASE_APP_ID') ?: ''
+  resValue 'string','firebase_pc_api_key', System.getenv('PC_FIREBASE_API_KEY') ?: ''
+  resValue 'string','firebase_pc_project_id', System.getenv('PC_FIREBASE_PROJECT_ID') ?: ''
+  resValue 'string','license_pc_server_url', System.getenv('PC_LICENSE_SERVER_URL') ?: ''
+ }
  namespace 'cr.controles.pagos'
  compileSdk 35
  defaultConfig {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 35
-  versionCode 22
-  versionName '22.0-licencias-protegidas'
+  versionCode 23
+  versionName '23.0-cuentas-preparadas'
  }
  signingConfigs {
   if(stableKeyPath && stablePass) {
@@ -37,6 +43,8 @@ dependencies {
  implementation 'com.google.mlkit:text-recognition:16.0.1'
  implementation 'androidx.core:core:1.13.1'
  implementation 'com.android.billingclient:billing:8.2.1'
+ implementation platform('com.google.firebase:firebase-bom:35.2.0')
+ implementation 'com.google.firebase:firebase-auth'
  testImplementation 'junit:junit:4.13.2'
  testImplementation 'org.json:json:20240303'
 }
