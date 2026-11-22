@@ -16,6 +16,15 @@ test('producto diferente o consumo previo no reciben licencia',()=>{
  assert.equal(assessPurchase(purchase('PURCHASED','otro_producto')).valid,false);
  assert.equal(assessPurchase(purchase('PURCHASED',PRODUCT_ID,undefined,'CONSUMPTION_STATE_CONSUMED')).valid,false);
 });
+test('no admite compra sin estado explícito de consumo de Play',()=>{
+ const p=purchase('PURCHASED');delete p.productLineItem[0].productOfferDetails.consumptionState;
+ assert.equal(assessPurchase(p).valid,false);
+});
+test('no admite indicio de reembolso completo',()=>{
+ const p=purchase('PURCHASED');p.productLineItem[0].productOfferDetails.quantity=1;
+ p.productLineItem[0].productOfferDetails.refundableQuantity=0;
+ assert.equal(assessPurchase(p).reason,'possible_refund');
+});
 test('estado inesperado o respuesta incompleta fallan de forma segura',()=>{
  assert.equal(assessPurchase(purchase('PURCHASE_STATE_UNSPECIFIED')).valid,false);
  assert.equal(assessPurchase({}).valid,false);
