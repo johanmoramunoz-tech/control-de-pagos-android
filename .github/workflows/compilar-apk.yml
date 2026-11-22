@@ -35,7 +35,7 @@ jobs:
           if not js: raise SystemExit('No se encontró JavaScript')
           Path('/tmp/control-pagos-v7.js').write_text(js.group(1))
           PY
-          node --check /tmp/control-pagos-v6.js
+          node --check /tmp/control-pagos-v7.js
       - name: Compilar APK debug
         run: gradle --no-daemon :app:assembleDebug
       - name: Publicar APK
