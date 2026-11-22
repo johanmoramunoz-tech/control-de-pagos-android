@@ -21,9 +21,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Usar SDK Android preinstalado
-        run: echo "ANDROID_HOME=$ANDROID_HOME"
-      - name: Instalar Android 35
+      - name: Instalar Android SDK 35
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Verificar JavaScript de la interfaz
         run: |
@@ -33,15 +31,33 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/control-pagos-v7.js').write_text(js.group(1))
+          Path('/tmp/control-pagos-v8.js').write_text(js.group(1))
           PY
-          node --check /tmp/control-pagos-v7.js
-      - name: Compilar APK debug
+          node --check /tmp/control-pagos-v8.js
+      - name: Preparar firma privada persistente
+        env:
+          CDP_KEYSTORE_B64: ${{ secrets.CDP_KEYSTORE_B64 }}
+          CDP_STORE_PASSWORD: ${{ secrets.CDP_STORE_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$CDP_KEYSTORE_B64" || -z "$CDP_STORE_PASSWORD" ]]; then
+            echo "::error::Faltan los secretos CDP_KEYSTORE_B64 y/o CDP_STORE_PASSWORD. Configure ambos secretos para firmar actualizaciones."
+            exit 1
+          fi
+          printf '%s' "$CDP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controlpagos-test.jks"
+          echo "CDP_KEYSTORE_PATH=$RUNNER_TEMP/controlpagos-test.jks" >> "$GITHUB_ENV"
+      - name: Compilar APK firmado estable
+        env:
+          CDP_STORE_PASSWORD: ${{ secrets.CDP_STORE_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verificar firma APK
+        run: |
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep 'Signer #1 certificate SHA-256 digest'
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: Control-de-Pagos-v7-APK-prueba
+          name: Control-de-Pagos-v8-APK-firma-estable
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
