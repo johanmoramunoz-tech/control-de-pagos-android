@@ -8,8 +8,8 @@ android {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 35
-  versionCode 20
-  versionName '20.0-billing-preparado'
+  versionCode 21
+  versionName '21.0-licencias-preparadas'
  }
  signingConfigs {
   if(stableKeyPath && stablePass) {
