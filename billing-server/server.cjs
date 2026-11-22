@@ -27,6 +27,8 @@ async function authorize(req){
  const identity=await admin.auth().verifyIdToken(token,true);
  if(!identity?.uid||identity.firebase?.sign_in_provider==='anonymous')
   throw Object.assign(new Error('Se requiere usuario autenticado, no anónimo'),{status:401});
+ if(identity.email_verified!==true)
+  throw Object.assign(new Error('Se requiere confirmar el correo electrónico'),{status:403});
  return identity.uid;
 }
 async function googleRequest(url,method='GET'){
