@@ -25,9 +25,10 @@ import java.nio.charset.StandardCharsets;
 import android.content.ActivityNotFoundException;
 
 public class MainActivity extends Activity {
-  private static final int EXPORT=10, IMPORT=11, VOICE=12, LOCAL_GALLERY=14, LOCAL_PHOTO=15, LOCAL_VOICE=16;
+  private static final int EXPORT=10, IMPORT=11, VOICE=12, LOCAL_GALLERY=14, LOCAL_PHOTO=15, LOCAL_VOICE=16, REPORT_EXPORT=17;
   private WebView web;
   private String backup;
+  private String reportContent;
   private Uri pendingPhoto;
   private boolean premiumPreview(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
   @Override public void onCreate(Bundle state) {
@@ -152,6 +153,18 @@ public class MainActivity extends Activity {
         startActivityForResult(i,EXPORT);
       });
     }
+    @JavascriptInterface public void exportReport(String content,String mime,String filename){
+      if(content==null||content.length()>8000000||!(mime.equals("text/html")||mime.equals("text/csv")))return;
+      String suggested=filename==null?"pagocheck-informe.csv":filename.replaceAll("[^A-Za-z0-9_.-]","_");
+      runOnUiThread(()->{
+        reportContent=content;
+        Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(mime);
+        i.putExtra(Intent.EXTRA_TITLE,suggested);
+        startActivityForResult(i,REPORT_EXPORT);
+      });
+    }
     @JavascriptInterface public void importData(){
       runOnUiThread(()->{
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -192,6 +205,13 @@ public class MainActivity extends Activity {
         }
         backup=null;
         Toast.makeText(this,"Respaldo guardado",Toast.LENGTH_SHORT).show();
+      }else if(request==REPORT_EXPORT&&reportContent!=null){
+        try(OutputStream out=getContentResolver().openOutputStream(uri)){
+          if(out==null)throw new Exception("Ubicación de destino inaccesible");
+          out.write(reportContent.getBytes(StandardCharsets.UTF_8));
+        }
+        reportContent=null;
+        Toast.makeText(this,"Informe guardado",Toast.LENGTH_SHORT).show();
       }else if(request==IMPORT){
         StringBuilder content=new StringBuilder();
         try(InputStream in=getContentResolver().openInputStream(uri)){
