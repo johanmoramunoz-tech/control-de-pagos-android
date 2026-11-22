@@ -8,7 +8,7 @@ const verify=require('../billing-server/verify-purchase.cjs');
 
 const TOKEN='valid_purchase_token_01234567890123456';
 
-function setup({enabled=false,playState='PURCHASED',product=verify.PRODUCT_ID,uid='user-1'}={}){
+function setup({enabled=false,playState='PURCHASED',product=verify.PRODUCT_ID,uid='user-1',emailVerified=true}={}){
  const docs=new Map();let apiCalls=0,claims=0,authCalls=0;
  let authorizedUid=uid;
  const play={purchaseStateContext:{purchaseState:playState},
@@ -39,7 +39,7 @@ function setup({enabled=false,playState='PURCHASED',product=verify.PRODUCT_ID,ui
  const fakeAdmin={
   apps:[{}],
   firestore:Object.assign(firestore,{FieldValue:{serverTimestamp:()=>'<serverTime>'}}),
-  auth:()=>({verifyIdToken:async()=>{authCalls++;return {uid:authorizedUid,firebase:{sign_in_provider:'password'}}}})
+  auth:()=>({verifyIdToken:async()=>{authCalls++;return {uid:authorizedUid,email_verified:emailVerified,firebase:{sign_in_provider:'password'}}}})
  };
  class GoogleAuth {
   async getClient(){return {request:async ({url,method})=>{
@@ -78,6 +78,13 @@ test('sin credenciales de cuenta no acepta solicitudes de licencia',async()=>{
  const h=setup({enabled:true});
  const r=await h.call('/v1/license/status','GET',{},'too_short');
  assert.equal(r.status,401);assert.equal(h.stats().apiCalls,0);
+});
+test('correo no verificado impide consultar o reclamar compras',async()=>{
+ const h=setup({enabled:true,emailVerified:false});
+ const r=await h.call('/v1/license/verify','POST',{purchaseToken:TOKEN});
+ assert.equal(r.status,403);
+ assert.equal(h.stats().apiCalls,0);
+ assert.equal(h.stats().claims,0);
 });
 test('un producto diferente no se asocia ni concede derechos',async()=>{
  const h=setup({enabled:true,product:'unrelated_product'});
