@@ -17,6 +17,8 @@ function harness(existing=0){
  const c={id:'c1',kind:'expense',name:'Internet',category:'Servicios',estimate:10000,overrides:{},start:'2026-01',due:15};
  const context={db,month:'2026-11',today:()=> '2026-11-22',monthNow:()=> '2026-11',confirm:()=>true,alert:()=>{},locked:()=>false,currentCommitments:()=>[c],target:x=>x.overrides['2026-11']??x.estimate,related:x=>db.transactions.filter(t=>t.commitmentId===x.id&&!t.reversed),executed:x=>db.transactions.filter(t=>t.commitmentId===x.id&&!t.reversed).reduce((a,t)=>a+t.amount,0),uuid:()=> 'new'+db.transactions.length,logging:()=>{},persist:()=>true,render:()=>{},safe:x=>String(x),crc:n=>'₡'+n,openPaymentAdjustment:()=>{context.adjusted=true}};
  vm.createContext(context);
+ const helpersStart=js.indexOf('function moneyDisplay('),helpersEnd=js.indexOf('const field=',helpersStart);
+ vm.runInContext(js.slice(helpersStart,helpersEnd),context);
  vm.runInContext(fn('checked','status')+fn('setPaidCheck','monthlyCards')+fn('finishPayment','openPaymentAdjustment'),context);
  return {context,db,c};
 }
