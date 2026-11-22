@@ -49,21 +49,19 @@ async function refreshClaim(uid,token){
  const hash=hashToken(token),ref=purchases.doc(hash);
  const play=await googleRequest(playUrl(token));
  const decision=assessPurchase(play);
+ // Un token inválido o una compra PENDING jamás se asocian a una cuenta.
+ // De otro modo, un tercero podría bloquear una futura compra legítima.
+ if(!decision.valid)return secureResponse(false,decision.reason);
  const now=admin.firestore.FieldValue.serverTimestamp();
- // Una compra solo puede asociarse a una cuenta; reclamación transaccional.
  const claim=await store.runTransaction(async trx=>{
   const doc=await trx.get(ref);
   const data=doc.data();
   if(data?.uid&&data.uid!==uid)return 'owned_by_other_user';
   trx.set(ref,{uid,productId:PRODUCT_ID,packageName,tokenHash:hash,purchaseToken:token,
-   state:decision.valid?'processing':decision.reason,lastVerified:now},{merge:true});
-  return decision.valid?'accepted':decision.reason;
+   state:'processing',lastVerified:now},{merge:true});
+  return 'accepted';
  });
  if(claim==='owned_by_other_user')return secureResponse(false,'compra_vinculada_a_otra_cuenta');
- if(!decision.valid){
-  await recalcUser(uid);
-  return secureResponse(false,decision.reason);
- }
  // Confirmación sólo después de verificación Play y reclamo durable.
  // Si falla acknowledgment, la llamada se puede repetir sin dar acceso.
  if(!decision.acknowledged){
@@ -75,7 +73,7 @@ async function refreshClaim(uid,token){
 }
 async function recalcUser(uid){
  const all=await purchases.where('uid','==',uid).get();
- const active=all.docs.some(d=>d.data().state==='active');
+ const active=all.docs.some(d=>d.data().state==='active'&&d.data().productId===PRODUCT_ID);
  await users.doc(uid).set({active,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
  return active;
 }
@@ -110,16 +108,23 @@ async function readJSON(req){
  try{return JSON.parse(data)}catch{throw Object.assign(new Error('JSON inválido'),{status:400})}
 }
 async function handle(req,res){
- if(req.url==='/health'&&req.method==='GET')return respond(res,200,{status:'ok',billingEnabled:false});
+ if(req.url==='/health'&&req.method==='GET')
+  return respond(res,200,{status:'ok',billingEnabled:false,verificationConfigured:process.env.LICENSE_VERIFICATION_ENABLED==='true'});
+ // Este prototipo no puede publicarse sin credenciales, Firebase, políticas de acceso
+ // y conciliación de anulaciones. Deshabilitado por defecto incluso si se despliega accidentalmente.
+ if(process.env.LICENSE_VERIFICATION_ENABLED!=='true')
+  return respond(res,503,{error:'Servicio de licencias aún no habilitado'});
  if(!['POST','GET'].includes(req.method))return respond(res,405,{error:'Método no admitido'});
- if(!['/v1/license/verify','/v1/license/status'].includes(req.url))return respond(res,404,{error:'Ruta desconocida'});
+ if(!['/v1/license/verify','/v1/license/status'].includes(req.url))
+  return respond(res,404,{error:'Ruta desconocida'});
  if((req.url==='/v1/license/verify'&&req.method!=='POST')||
-    (req.url==='/v1/license/status'&&req.method!=='GET'))return respond(res,405,{error:'Método no admitido'});
+    (req.url==='/v1/license/status'&&req.method!=='GET'))
+  return respond(res,405,{error:'Método no admitido'});
  try{
   const uid=await authorize(req);
   if(req.url==='/v1/license/status')return respond(res,200,await verifiedStatus(uid));
   const {purchaseToken}=await readJSON(req);
-  hashToken(purchaseToken);
+  try{hashToken(purchaseToken)}catch(e){throw Object.assign(new Error('Token de compra inválido'),{status:400})}
   return respond(res,200,await refreshClaim(uid,purchaseToken));
  }catch(error){
   // No filtrar tokens, credenciales ni datos sensibles en respuestas.
