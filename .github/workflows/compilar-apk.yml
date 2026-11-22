@@ -46,6 +46,8 @@ jobs:
           fi
           printf '%s' "$CDP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controlpagos-test.jks"
           echo "CDP_KEYSTORE_PATH=$RUNNER_TEMP/controlpagos-test.jks" >> "$GITHUB_ENV"
+      - name: Probar presupuestos y subcategorías
+        run: node --test tests/presupuestos-consumo.test.cjs
       - name: Probar exportación de informes por período
         run: node --test tests/reportes-periodos.test.cjs
       - name: Probar controles de pagos mensuales
