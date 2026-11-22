@@ -8,8 +8,8 @@ android {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 35
-  versionCode 17
-  versionName '17.0-gratis-premium'
+  versionCode 18
+  versionName '18.0-avisos'
  }
  signingConfigs {
   if(stableKeyPath && stablePass) {
