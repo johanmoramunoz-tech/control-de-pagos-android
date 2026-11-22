@@ -49,3 +49,43 @@ test('un compromiso sin abonos genera pago proyectado una sola vez',()=>{
  assert.equal(db.transactions[0].amount,10000);
  assert.equal(context.checked(c),true);
 });
+
+test('ajustar importe real y marcar completo registra solo diferencia',()=>{
+ const {context,db,c}=harness(3000);
+ const inputs={
+  f_total:{value:'12500'},
+  f_date:{value:'2026-11-22'},
+  f_full:{checked:true},
+  f_partial:{value:'0',disabled:false},
+  f_note:{value:'Pago de noviembre'}
+ };
+ context.$=id=>inputs[id];
+ context.field=()=>'';
+ context.popup=(title,html,callback)=>{context.saveAdjustment=callback};
+ vm.runInContext(fn('openPaymentAdjustment','openPayment'),context);
+ context.openPaymentAdjustment('c1');
+ assert.equal(context.saveAdjustment(),true);
+ assert.equal(db.transactions.length,2);
+ assert.equal(db.transactions[1].amount,9500);
+ assert.equal(c.overrides['2026-11'],12500);
+ assert.equal(context.checked(c),true);
+});
+test('seguimiento registra abono pero no activa estado pagado',()=>{
+ const {context,db,c}=harness(3000);
+ const inputs={
+  f_total:{value:'10000'},
+  f_date:{value:'2026-11-22'},
+  f_full:{checked:false},
+  f_partial:{value:'2000',disabled:false},
+  f_note:{value:''}
+ };
+ context.$=id=>inputs[id];
+ context.field=()=>'';
+ context.popup=(title,html,callback)=>{context.saveAdjustment=callback};
+ vm.runInContext(fn('openPaymentAdjustment','openPayment'),context);
+ context.openPaymentAdjustment('c1');
+ assert.equal(context.saveAdjustment(),true);
+ assert.equal(db.transactions.length,2);
+ assert.equal(db.transactions[1].amount,2000);
+ assert.equal(context.checked(c),false);
+});
