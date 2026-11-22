@@ -47,7 +47,7 @@ function setup({enabled=false,playState='PURCHASED',product=verify.PRODUCT_ID,ui
    return {data:method==='POST'?{}:play};
   }}}
  }
- const modules={http:require('node:http'),'google-auth-library':{GoogleAuth},
+ const modules={'node:http':require('node:http'),'google-auth-library':{GoogleAuth},
   'firebase-admin':fakeAdmin,'./verify-purchase.cjs':verify};
  const module={exports:{}};
  const context={module,exports:module.exports,process:{env:{LICENSE_VERIFICATION_ENABLED:enabled?'true':'false'}},
