@@ -31,6 +31,9 @@ final class LicenseAccountManager {
   private String message="Cuenta Premium no configurada";
   private boolean licenseVerified=false;
   private boolean checking=false;
+  private long authRevision=0;
+  boolean hasVerifiedLicense(){return licenseVerified&&auth!=null&&auth.getCurrentUser()!=null&&auth.getCurrentUser().isEmailVerified();}
+  boolean readyForPurchaseVerification(){return auth!=null&&endpoint!=null&&auth.getCurrentUser()!=null&&auth.getCurrentUser().isEmailVerified();}
 
   LicenseAccountManager(Activity activity,Listener listener){
     this.activity=activity;this.listener=listener;
@@ -103,10 +106,12 @@ final class LicenseAccountManager {
     });
   }
   void signOut(){
+    authRevision++;
     if(auth!=null)auth.signOut();
-    licenseVerified=false;message="Sesión cerrada";publish();
+    checking=false;licenseVerified=false;message="Sesión cerrada";publish();
   }
   void refreshLicense(){
+    long revision=++authRevision;
     licenseVerified=false;
     if(auth==null){message="Configura Firebase para consultar la licencia.";publish();return;}
     FirebaseUser user=auth.getCurrentUser();
@@ -148,10 +153,80 @@ final class LicenseAccountManager {
         final boolean valid=accepted;final String info=detail;
         activity.runOnUiThread(()->{
           // No conservar derechos de un usuario diferente tras un cierre de sesión.
+          if(revision!=authRevision)return;
           licenseVerified=valid&&auth.getCurrentUser()!=null&&user.getUid().equals(auth.getCurrentUser().getUid());
           checking=false;message=info;publish();
         });
       },"pc-license-check").start();
+    });
+  }
+  /**
+   * Reenvío del token de compra al servidor. El token y el Firebase ID token
+   * jamás llegan a JavaScript, a los respaldos ni a los registros de finanzas.
+   */
+  void verifyPurchase(String purchaseToken){
+    if(purchaseToken==null||purchaseToken.length()<20||purchaseToken.length()>4096||
+       !purchaseToken.matches("[A-Za-z0-9._:-]+")){
+      message="Token de compra inválido.";publish();return;
+    }
+    if(!readyForPurchaseVerification()){
+      message="Inicia sesión, verifica el correo y configura el servidor para recuperar Premium.";
+      licenseVerified=false;publish();return;
+    }
+    FirebaseUser user=auth.getCurrentUser();
+    final long revision=++authRevision;
+    checking=true;licenseVerified=false;message="Verificando compra con Google Play de forma segura...";publish();
+    user.getIdToken(true).addOnCompleteListener(activity,result->{
+      if(revision!=authRevision)return;
+      if(!result.isSuccessful()||result.getResult()==null){
+        checking=false;message="No fue posible autenticar la compra.";publish();return;
+      }
+      final String bearer=result.getResult().getToken();
+      new Thread(()->{
+        boolean accepted=false;
+        String detail="No se pudo verificar la compra.";
+        HttpsURLConnection conn=null;
+        try{
+          URL url=new URL(endpoint+"/v1/license/verify");
+          conn=(HttpsURLConnection)url.openConnection();
+          conn.setConnectTimeout(10000);conn.setReadTimeout(10000);
+          conn.setRequestMethod("POST");
+          conn.setUseCaches(false);
+          conn.setDoOutput(true);
+          conn.setRequestProperty("Authorization","Bearer "+bearer);
+          conn.setRequestProperty("Content-Type","application/json; charset=utf-8");
+          JSONObject request=new JSONObject();
+          request.put("purchaseToken",purchaseToken);
+          byte[] bytes=request.toString().getBytes(StandardCharsets.UTF_8);
+          if(bytes.length>8192)throw new Exception("Solicitud demasiado grande");
+          try(java.io.OutputStream out=conn.getOutputStream()){out.write(bytes);}
+          int status=conn.getResponseCode();
+          if(status==200){
+            try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+              byte[] block=new byte[1024];int n;
+              while((n=in.read(block))!=-1){
+                out.write(block,0,n);
+                if(out.size()>8192)throw new Exception("Respuesta demasiado grande");
+              }
+              JSONObject response=new JSONObject(out.toString(StandardCharsets.UTF_8.name()));
+              accepted=response.optBoolean("premium",false)&&
+                "pagocheck_premium_unico".equals(response.optString("productId"))&&
+                "verificada".equals(response.optString("reason"));
+              detail=accepted?"Compra Premium verificada.":"Compra no validada por el servidor.";
+            }
+          }else detail="El servidor de licencias no pudo confirmar la compra ("+status+").";
+        }catch(Exception e){
+          detail="No fue posible verificar la compra mediante una conexión segura.";
+        }finally{if(conn!=null)conn.disconnect();}
+        final boolean valid=accepted;final String messageText=detail;
+        activity.runOnUiThread(()->{
+          if(revision!=authRevision)return;
+          licenseVerified=valid&&auth.getCurrentUser()!=null&&
+            user.getUid().equals(auth.getCurrentUser().getUid())&&
+            auth.getCurrentUser().isEmailVerified();
+          checking=false;message=messageText;publish();
+        });
+      },"pc-purchase-verify").start();
     });
   }
   private void publish(){
