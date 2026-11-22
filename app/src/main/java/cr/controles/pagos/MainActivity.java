@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
   private String reportContent;
   private Uri pendingPhoto;
   private PlayBillingManager playBilling;
+  private LicenseAccountManager licenseAccount;
   private boolean isDebugBuild(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
   // Control de evaluación únicamente. No equivale a una licencia comercial.
   private boolean premiumPreview(){return isDebugBuild()&&getSharedPreferences("pagocheck_preview",MODE_PRIVATE).getBoolean("premium_enabled",false);}
@@ -88,6 +89,8 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new ReminderBridge(),"AndroidReminders");
     web.addJavascriptInterface(new LocalPremiumBridge(),"AndroidLocal");
     web.addJavascriptInterface(new PlayBillingBridge(),"AndroidPlayBilling");
+    web.addJavascriptInterface(new LicenseAccountBridge(),"AndroidLicenseAccount");
+    licenseAccount=new LicenseAccountManager(this,json->sendAiCallback("receiveLicenseAccountStatus",json));
     playBilling=new PlayBillingManager(this,json->sendAiCallback("receivePlayBillingStatus",json));
     ReminderScheduler.refresh(this);
     setContentView(web);
@@ -163,6 +166,23 @@ public class MainActivity extends Activity {
           startActivityForResult(intent,LOCAL_VOICE);
         }catch(Exception e){sendAiCallback("receiveLocalError","No hay reconocimiento de voz compatible instalado.");}
       });
+    }
+  }
+  public class LicenseAccountBridge {
+    @JavascriptInterface public void status(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.status();});
+    }
+    @JavascriptInterface public void signIn(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.showLogin(false);});
+    }
+    @JavascriptInterface public void register(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.showLogin(true);});
+    }
+    @JavascriptInterface public void signOut(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.signOut();});
+    }
+    @JavascriptInterface public void refreshLicense(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.refreshLicense();});
     }
   }
   public class PlayBillingBridge {
@@ -291,6 +311,7 @@ public class MainActivity extends Activity {
     web.removeJavascriptInterface("AndroidReminders");
     web.removeJavascriptInterface("AndroidLocal");
     web.removeJavascriptInterface("AndroidPlayBilling");
+    web.removeJavascriptInterface("AndroidLicenseAccount");
     if(playBilling!=null)playBilling.close();
     web.destroy();super.onDestroy();
   }
