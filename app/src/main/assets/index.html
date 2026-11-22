@@ -4,7 +4,7 @@
 'use strict';
 const KEY='control-pagos-v4-demo', $=id=>document.getElementById(id),today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`},monthNow=()=>today().slice(0,7),uuid=()=>globalThis.crypto?.randomUUID?.()||'id'+Date.now()+Math.random().toString(36).slice(2),crc=n=>'₡'+Math.round(n||0).toLocaleString('es-CR'),safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),numeric=v=>Number.isFinite(Number(v))?Number(v):0;
 let month=monthNow(),tab='home',callback=null,db={schema:4,commitments:[],transactions:[],monthClosed:{},audit:[]};
-try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&saved.schema===4&&Array.isArray(saved.commitments)&&Array.isArray(saved.transactions)&&saved.monthClosed&&Array.isArray(saved.audit))db=saved}catch(e){}
+try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&[4,6].includes(saved.schema)&&Array.isArray(saved.commitments)&&Array.isArray(saved.transactions)&&saved.monthClosed&&Array.isArray(saved.audit))db=saved}catch(e){}
 
 const EMOJI=['💼','💰','🏦','📈','🪙','🎁','↩️','🏠','🛒','💡','🚗','⛽','🏥','🎓','💳','📱','🍽️','🧾','👨‍👩‍👧','🔧','✈️','🐾','🎯','📦','🔁','➕','📁'];
 const DEFAULT_CATEGORIES=[['income','Salario','💼'],['income','Dividendos','📈'],['income','Reembolsos','↩️'],['income','Intereses','🏦'],['income','Venta de bienes','💰'],['income','Regalos recibidos','🎁'],['income','Otros ingresos','➕'],['expense','Préstamos','💳'],['expense','Servicios','💡'],['expense','Vivienda','🏠'],['expense','Alimentación','🛒'],['expense','Transporte','🚗'],['expense','Combustible','⛽'],['expense','Educación','🎓'],['expense','Salud','🏥'],['expense','Entretenimiento','🎁'],['expense','Otros gastos','📁']].map(([kind,name,icon])=>({id:uuid(),kind,name,icon}));
@@ -20,7 +20,7 @@ function categorySelect(kind,selected){return '<div class="formrow"><label for="
 function balanceAt(m){
  if(!db.opening||m<db.opening.month)return null;
  const start=db.opening.date||db.opening.month+'-01';
- const movement=db.transactions.filter(t=>!t.reversed&&t.date>=start&&t.month<=m&&t.kind!=='transfer').reduce((a,t)=>a+(t.kind==='income'?t.amount:-t.amount),0);
+ const movement=db.transactions.filter(t=>!t.reversed&&t.date>=start&&t.month<=m&&t.date<=(m>=monthNow()?today():m+'-31')&&t.kind!=='transfer').reduce((a,t)=>a+(t.kind==='income'?t.amount:-t.amount),0);
  return db.opening.amount+movement;
 }
 function editCategory(kind,id){
