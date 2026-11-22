@@ -24,7 +24,7 @@ jobs:
       - name: Usar SDK Android preinstalado
         run: echo "ANDROID_HOME=$ANDROID_HOME"
       - name: Instalar Android 35
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compilar APK debug
         run: gradle --no-daemon :app:assembleDebug
       - name: Publicar APK
