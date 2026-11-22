@@ -139,6 +139,7 @@ public class MainActivity extends Activity {
   }
   public class VoiceBridge {
     @JavascriptInterface public void startSpeechRecognition(){
+      if(!premiumPreview()){sendAiCallback("receiveLocalError","El dictado asistido pertenece a Premium.");return;}
       runOnUiThread(()->{
         try{
           Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
