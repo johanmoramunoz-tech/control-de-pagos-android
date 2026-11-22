@@ -228,12 +228,12 @@ function openPaymentAdjustment(id){
  '<p class="muted"><strong>'+safe(c.name)+'</strong> · Previsto '+crc(planned)+' · Abonos '+crc(already)+'. Ajustar aquí solo afecta el mes seleccionado; no cambia la proyección de meses posteriores.</p>'+
  field('total','Importe total de este mes (₡)','number',Math.max(planned,already),'required min="1" max="1000000000" step="1"')+
  field('date','Fecha efectiva','date',month===monthNow()?today():month+'-01','required')+
- '<div class="formrow"><label for="f_full">Estado del compromiso</label><select id="f_full"><option value="pending">Seguimiento — no está pagado por completo</option><option value="complete">✓ Pago completo — marcar como realizado</option></select></div>'+
+ '<div class="formrow"><label for="f_full" style="display:flex;gap:10px;align-items:center;padding:11px;background:#eaf7f1;border:1px solid #bfe2ce;border-radius:10px;"><input type="checkbox" id="f_full" style="width:19px;height:19px;flex:none;"> ✓ Confirmar pago completo y marcar como realizado</label></div>'+
  field('partial','Abono adicional (solo para seguimiento)','number',0,'min="0" max="1000000000" step="1"')+
  field('note','Referencia u observación','text','','maxlength="160"')+
  '<p class="muted">Al confirmar pago completo, se registrará automáticamente solo la diferencia entre el total real y los abonos ya anotados. En seguimiento, el abono no marca el compromiso como pagado.</p>',
  ()=>{
-  const total=Number($('f_total').value),date=$('f_date').value,complete=$('f_full').value==='complete',partial=Number($('f_partial').value),note=$('f_note').value.trim();
+  const total=Number($('f_total').value),date=$('f_date').value,complete=$('f_full').checked,partial=Number($('f_partial').value),note=$('f_note').value.trim();
   if(!Number.isSafeInteger(total)||total<1||total>1e9||!Number.isSafeInteger(partial)||partial<0||partial>1e9||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date.slice(0,7)!==month){alert('Revisa los importes y utiliza una fecha correspondiente al mes seleccionado.');return false}
   if(total<already){alert('El total real no puede ser inferior a los abonos ya registrados ('+crc(already)+'). Revisa o reversa primero el movimiento incorrecto.');return false}
   if(!complete&&already+partial>total){alert('Los abonos no deben superar el importe ajustado; corrige el total o el abono.');return false}
@@ -248,6 +248,7 @@ function openPaymentAdjustment(id){
   logging(complete?'Pago mensual ajustado y confirmado':'Seguimiento de pago actualizado',{month,commitmentId:c.id,total,recorded:newAmount,complete});
   return persist();
  });
+ $('f_full').onchange=()=>{const partial=$('f_partial');if($('f_full').checked){partial.value='0';partial.disabled=true;}else{partial.disabled=false;}};
 }
 
 function openPayment(id){if(locked())return;const c=db.commitments.find(x=>x.id===id);if(!c)return;const rest=Math.max(0,target(c)-executed(c));popup(c.kind==='income'?'Registrar ingreso':'Registrar pago o abono',`<p class="muted"><strong>${safe(c.name)}</strong> · Proyectado ${crc(target(c))} · Ya registrado ${crc(executed(c))} · Restante ${crc(rest)}</p>`+field('amount','Monto real recibido/pagado (₡)','number',rest,'required min="1" max="1000000000" step="1"')+field('date','Fecha efectiva','date',today(),'required')+field('note','Referencia u observación','text','','maxlength="200"'),()=>{const n=Number($('f_amount').value),date=$('f_date').value;if(!Number.isInteger(n)||n<=0||n>1e9||!/^\d{4}-\d{2}-\d{2}$/.test(date)){alert('Monto o fecha inválida.');return false}return addTx({commitmentId:c.id,kind:c.kind,amount:n,date,description:c.name,category:c.category,source:'manual',author:'Usuario local',note:$('f_note').value.trim()})})}
