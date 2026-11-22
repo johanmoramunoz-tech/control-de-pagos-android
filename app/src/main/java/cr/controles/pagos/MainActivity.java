@@ -30,7 +30,9 @@ public class MainActivity extends Activity {
   private String backup;
   private String reportContent;
   private Uri pendingPhoto;
-  private boolean premiumPreview(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
+  private boolean isDebugBuild(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
+  // Control de evaluación únicamente. No equivale a una licencia comercial.
+  private boolean premiumPreview(){return isDebugBuild()&&getSharedPreferences("pagocheck_preview",MODE_PRIVATE).getBoolean("premium_enabled",false);}
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     getWindow().setStatusBarColor(Color.rgb(16,25,43));
@@ -74,10 +76,16 @@ public class MainActivity extends Activity {
   public class LocalPremiumBridge {
     @JavascriptInterface public void status(){
       JSONObject o=new JSONObject();
-      try{o.put("available",premiumPreview()).put("preview",premiumPreview())
+      try{o.put("available",premiumPreview()).put("preview",isDebugBuild())
           .put("recognition","ML Kit OCR integrado").put("billingActive",false);}
       catch(Exception ignored){}
       sendAiCallback("receiveLocalStatus",o.toString());
+    }
+    @JavascriptInterface public void setTestPremium(boolean enabled){
+      // Solo existe para las compilaciones debug firmadas de evaluación.
+      if(!isDebugBuild())return;
+      getSharedPreferences("pagocheck_preview",MODE_PRIVATE).edit().putBoolean("premium_enabled",enabled).apply();
+      status();
     }
     @JavascriptInterface public void gallery(){
       if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
