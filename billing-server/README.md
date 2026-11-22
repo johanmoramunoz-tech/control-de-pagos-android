@@ -1,4 +1,4 @@
-# PagoCheck IA — Verificación de licencias Google Play (v23, PREPARACIÓN)
+# PagoCheck IA — Verificación de licencias Google Play (v24, PREPARACIÓN)
 
 **Estado:** backend con protecciones reforzadas, **no desplegado**, sin credenciales, sin vinculación de cuentas Android y sin compras habilitadas.
 
@@ -66,3 +66,12 @@ Antes de implementar cobros:
 4. Implementar vinculación del token de compra real al usuario autenticado, notificaciones de revocación (RTDN y Voided Purchases) y renovación de licencias. **La v23 sólo prepara la consulta de licencias, no el envío del token de compra.**
 5. Revisar y probar qué ocurre al cambiar de cuenta, cerrar sesión, reinstalar y usar sin Internet. El servidor sigue deshabilitado por defecto y la interfaz no usa la respuesta para abrir funciones de pago.
 6. Antes de comenzar distribución comercial, eliminar el interruptor de Premium de prueba de compilaciones Release y habilitar permisos sólo con una licencia verificada.
+
+## v24: integración Android - Play Billing - servidor
+Se preparó la recuperación de compras no consumibles confirmadas por Google Play mediante `PlayBillingManager.verifyOwnedPurchases()`. El `purchaseToken` se entrega directamente al componente Android `LicenseAccountManager.verifyPurchase(...)`: nunca se muestra en el WebView, los respaldos financieros ni las notificaciones.
+
+El módulo Android utiliza la sesión Firebase con correo verificado y solicita un ID token renovado. Envía `POST /v1/license/verify` por HTTPS, autentica al usuario, recibe la verificación del backend y actualiza el acceso Premium. Se bloquea cualquier operación si falta configuración o credenciales. La misma operación puede servir para recuperar una compra previa.
+
+El acceso Premium en modo **Release** queda condicionado a la licencia verificada del servidor. El desbloqueo de prueba permanece limitado a variantes Android `debug`. En el código actual `LIVE_PURCHASES_ENABLED=false`; no se inicia ni cobra ninguna compra.
+
+**Sigue pendiente para producción:** configurar Google Play Console, Firebase, servidor HTTPS, producto no consumible y pruebas con licencia real; activar el cobro solamente después de validar los eventos de compra, anulaciones y recibos; controlar caducidad de la sesión y comprobar funcionamiento offline. Los registros financieros continúan en el almacenamiento del teléfono.
