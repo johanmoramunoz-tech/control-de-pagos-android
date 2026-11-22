@@ -8,8 +8,8 @@ android {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 35
-  versionCode 10
-  versionName '10.0-BYOK'
+  versionCode 11
+  versionName '11.0-chatgpt-plan'
  }
  signingConfigs {
   if(stableKeyPath && stablePass) {
