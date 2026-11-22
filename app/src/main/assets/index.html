@@ -379,20 +379,31 @@ function openPaymentAdjustment(id){
 function openPayment(id){if(locked())return;const c=db.commitments.find(x=>x.id===id);if(!c)return;const rest=Math.max(0,target(c)-executed(c));popup(c.kind==='income'?'Registrar ingreso':'Registrar pago o abono',`<p class="muted"><strong>${safe(c.name)}</strong> · Proyectado ${crc(target(c))} · Ya registrado ${crc(executed(c))} · Restante ${crc(rest)}</p>`+field('amount','Monto real recibido/pagado (₡)','number',rest,'required min="1" max="1000000000" step="1"')+field('date','Fecha efectiva','date',today(),'required')+field('note','Referencia u observación','text','','maxlength="200"'),()=>{const n=Number($('f_amount').value),date=$('f_date').value;if(!Number.isInteger(n)||n<=0||n>1e9||!/^\d{4}-\d{2}-\d{2}$/.test(date)){alert('Monto o fecha inválida.');return false}return addTx({commitmentId:c.id,kind:c.kind,amount:n,date,description:c.name,category:c.category,source:'manual',author:'Usuario local',note:$('f_note').value.trim()})})}
 function openFree(source){
  if(locked())return;
- popup(source==='photo'?'Registrar movimiento desde fotografía':'Nuevo movimiento real',
+ popup('Nuevo movimiento real',
  '<div class="formrow"><label for="f_kind">Tipo</label><select id="f_kind"><option value="expense">Gasto</option><option value="income">Ingreso</option><option value="transfer">Traslado entre cuentas propias</option></select></div>'+
  field('description','Concepto','text','','required maxlength="100"')+
  field('amount','Monto real (₡)','number','','required min="1" max="1000000000" step="1"')+
- field('date','Fecha efectiva','date',today(),'required')+
+ field('date','Fecha efectiva','date',month===monthNow()?today():month+'-01','required')+
  '<div id="catContainer">'+categorySelect('expense','')+'</div>'+
+ '<div id="budgetContainer"></div>'+
  field('note','Referencia o detalle','text','','maxlength="200"')+
- '<p class="muted">Los traslados entre cuentas propias, incluidos ahorros, no son ingresos ni gastos nuevos. Esta versión no extrae datos de fotos automáticamente.</p>',
+ '<p class="muted">Asocia compras a presupuestos para actualizar el disponible por subcategoría. Los traslados internos no son ingresos ni gastos.</p>',
  ()=>{
  const desc=$('f_description').value.trim(),amount=Number($('f_amount').value),date=$('f_date').value,kind=$('f_kind').value;
- if(!desc||!Number.isInteger(amount)||amount<=0||amount>1e9||!/^\d{4}-\d{2}-\d{2}$/.test(date)){alert('Revisa concepto, monto y fecha.');return false}
- const category=kind==='transfer'?'Transferencia interna':selectedCategory();if(!category)return false;return addTx({kind,description:desc,amount,date,category,source,author:'Usuario local',note:$('f_note').value.trim(),commitmentId:null})
+ if(!desc||!Number.isSafeInteger(amount)||amount<=0||amount>1e9||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date.slice(0,7)!==month){alert('Revisa concepto, monto y fecha del mes seleccionado.');return false}
+ const category=kind==='transfer'?'Transferencia interna':selectedCategory();if(!category)return false;
+ const chosen=budgetChoice(kind,category);if(!chosen)return false;
+ const budget=chosen.budgetId?activeBudgets().find(b=>b.id===chosen.budgetId):null;
+ if(budget&&budgetUsed(budget)+amount>budgetLimit(budget)&&!confirm('Esta compra supera el presupuesto en '+crc(budgetUsed(budget)+amount-budgetLimit(budget))+'. ¿Continuar?'))return false;
+ return addTx({kind,description:desc,amount,date,category,...chosen,source:'manual',author:'Usuario local',note:$('f_note').value.trim(),commitmentId:null});
  });
- $('f_kind').onchange=()=>{$('catContainer').innerHTML=$('f_kind').value==='transfer'?'<p class="muted">Sin cambio en el saldo total de tus cuentas.</p>':categorySelect($('f_kind').value,'')};
+ $('f_kind').onchange=()=>{
+  $('catContainer').innerHTML=$('f_kind').value==='transfer'?'<p class="muted">Sin cambio en el saldo total de tus cuentas.</p>':categorySelect($('f_kind').value,'');
+  if($('f_category'))$('f_category').onchange=()=>refreshBudgetChoices();
+  refreshBudgetChoices();
+ };
+ if($('f_category'))$('f_category').onchange=()=>refreshBudgetChoices();
+ refreshBudgetChoices();
 }
 function openVoice(){if(locked())return;popup('Dictado o escritura de gasto',`<p class="muted">En el APK, pulsa Dictar con Android para reconocer la voz. También puedes escribir «registra 25000 colones de combustible». La categoría se deduce con reglas básicas locales, no mediante IA.</p><button class="button outline" type="button" onclick="startNativeVoice()">🎙 Dictar con Android</button>`+field('phrase','Instrucción reconocida o escrita','text','','required maxlength="220"'),()=>{const p=$('f_phrase').value.trim(),match=p.match(/(\d[\d.,\s]*)\s*(?:colones|₡)?/i);if(!match){alert('No pude reconocer el monto. Usa números: 25000.');return false}let raw=match[1].replace(/[^\d]/g,''),amount=Number(raw);if(!Number.isInteger(amount)||amount<=0||amount>1e9){alert('Monto inválido.');return false}const desc=p.toLowerCase().includes('combustible')?'Combustible':p.toLowerCase().includes('aliment')?'Alimentación':'Gasto por voz';return addTx({kind:'expense',description:desc,amount,date:today(),category:desc==='Combustible'?'Transporte':desc==='Alimentación'?'Alimentación':'Otros',source:'voice',author:'Usuario local',note:'Texto proporcionado: '+p.slice(0,150),commitmentId:null})})}
 function startNativeVoice(){if(window.AndroidAI?.startSpeechRecognition){window.AndroidAI.startSpeechRecognition()}else{alert('Dictado nativo disponible solo en el APK. En el navegador, escribe la instrucción.') }} function receiveVoiceTranscript(v){const el=document.getElementById('f_phrase');if(el)el.value=String(v).slice(0,220)}
@@ -426,6 +437,7 @@ function receiveLocalProposal(json){
  field('date','Fecha de la operación','date',date,'required')+
  '<div class="formrow"><label for="f_category">Categoría</label><select id="f_category">'+cats.map(c=>'<option value="'+safe(c.name)+'" '+(c.name===suggested?'selected':'')+'>'+safe(c.icon)+' '+safe(c.name)+'</option>').join('')+'</select></div>'+
  '<div class="formrow"><label for="f_verified">¿Realmente ocurrió este ingreso o gasto?</label><select id="f_verified"><option value="no">No, solo estoy revisando</option><option value="yes">Sí, confirmo el movimiento</option></select></div>'+
+ '<div id="budgetContainer">'+budgetFormOptions(kind,'',suggested)+'</div>'+
  field('note','Observaciones','text','','maxlength="160"'),
  ()=>{
   if($('f_verified').value!=='yes'){alert('No se guardó: confirma que el movimiento ocurrió realmente.');return false}
@@ -436,14 +448,19 @@ function receiveLocalProposal(json){
   if(db.monthClosed[operationMonth]){alert('El mes '+operationMonth+' está cerrado. Reábrelo desde Cierre antes de registrar.');return false}
   if(operationMonth!==month&&!confirm('La operación corresponde al mes '+operationMonth+'. ¿Registrar allí y abrir ese mes automáticamente?'))return false;
   if(r.currency==='unknown'&&!confirm('El OCR no reconoció explícitamente la moneda. ¿Confirmas que el monto indicado está en colones costarricenses?'))return false;
+  const selectedBudget=budgetChoice(kind,category);if(!selectedBudget)return false;
+  const budget=selectedBudget.budgetId?activeBudgets(operationMonth).find(b=>b.id===selectedBudget.budgetId):null;
+  if(budget&&budgetUsed(budget,operationMonth)+amount>budgetLimit(budget,operationMonth)&&!confirm('La compra supera el presupuesto en '+crc(budgetUsed(budget,operationMonth)+amount-budgetLimit(budget,operationMonth))+'. ¿Continuar?'))return false;
   if(db.transactions.some(t=>!t.reversed&&t.date===date&&t.kind===kind&&t.amount===amount&&String(t.description).trim().toLowerCase()===description.toLowerCase())&&!confirm('Existe un movimiento muy similar. ¿Guardar nuevamente?'))return false;
   month=operationMonth;
-  return addTx({kind,amount,date,description,category,source:'premium-local',author:'Usuario local',
+  return addTx({kind,amount,date,description,category,...selectedBudget,source:'premium-local',author:'Usuario local',
     note:($('f_note').value.trim()+' · revisión de OCR/voz local; confirmado por usuario').slice(0,200),
     commitmentId:null,verification:'user_confirmed'});
  });
  const select=$('candidateAmount');
  if(select)select.onchange=()=>{if(select.value)$('f_amount').value=select.value;};
+ bindBudgetForm();
+ $('f_category').onchange=()=>refreshBudgetChoices();
 }
 function bindLocalPremium(){
  const a=$('localCamera')||$('movementCamera'),b=$('localGallery')||$('movementGallery'),c=$('localSpeech')||$('movementSpeech');
