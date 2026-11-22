@@ -91,7 +91,10 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new LocalPremiumBridge(),"AndroidLocal");
     web.addJavascriptInterface(new PlayBillingBridge(),"AndroidPlayBilling");
     web.addJavascriptInterface(new LicenseAccountBridge(),"AndroidLicenseAccount");
-    licenseAccount=new LicenseAccountManager(this,json->sendAiCallback("receiveLicenseAccountStatus",json));
+    licenseAccount=new LicenseAccountManager(this,json->{
+      sendAiCallback("receiveLicenseAccountStatus",json);
+      new LocalPremiumBridge().status();
+    });
     playBilling=new PlayBillingManager(this,json->sendAiCallback("receivePlayBillingStatus",json),token->{
       if(licenseAccount!=null)licenseAccount.verifyPurchase(token);
     });
