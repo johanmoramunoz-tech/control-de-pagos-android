@@ -1,4 +1,4 @@
-# PagoCheck IA — Verificación de licencias Google Play (v22, PREPARACIÓN)
+# PagoCheck IA — Verificación de licencias Google Play (v23, PREPARACIÓN)
 
 **Estado:** backend con protecciones reforzadas, **no desplegado**, sin credenciales, sin vinculación de cuentas Android y sin compras habilitadas.
 
@@ -47,3 +47,22 @@ Nota: Google Play exige reconocer las compras confirmadas oportunamente; las tra
 - Servicio privado HTTPS con identidad administrada y acceso exclusivo a Android Publisher API y Firestore.
 - Políticas de privacidad, tratamiento de reembolsos, eliminación de cuenta, retención de datos y canal de soporte.
 - Aprobación de los mecanismos de prueba de compras y licencias de Google Play.
+
+## v23: cuenta de compra en Android (sin servicio habilitado)
+El módulo nativo `LicenseAccountManager.java` admite registro, inicio de sesión, confirmación del correo y consulta HTTPS de derechos mediante `GET /v1/license/status`. **No** sincroniza los registros ni envía importes, documentos, facturas o contraseñas al WebView. La cuenta sólo sirve para recuperar Premium.
+
+Se deben suministrar **en la compilación Android**, desde variables de entorno del proceso de construcción (no en mensajes ni en el repositorio):
+- `PC_FIREBASE_APP_ID`: identificador de app Android del proyecto Firebase, que corresponde al paquete `cr.controles.pagos`.
+- `PC_FIREBASE_API_KEY`: clave pública de configuración Android Firebase (no es una cuenta de servicio ni un secreto de backend).
+- `PC_FIREBASE_PROJECT_ID`: proyecto de autenticación.
+- `PC_LICENSE_SERVER_URL`: URL base HTTPS del servidor (sin rutas adicionales, consultas, credenciales o puertos alternativos).
+
+Por defecto, las variables son cadenas vacías: la aplicación es **Gratis y local**, los controles de cuenta aparecen deshabilitados, el servidor de licencia no se consulta y las compras siguen bloqueadas.
+
+Antes de implementar cobros:
+1. Crear proyecto Firebase propio y registrar la app Android con paquete correcto.
+2. Habilitar inicio de sesión Email/Password y verificar emails; revisar las cuotas, privacidad y manejo de recuperación de cuentas.
+3. Configurar el backend con identidad de servicio y TLS y comprobar `GET /v1/license/status` con Firebase ID token y correo validado.
+4. Implementar vinculación del token de compra real al usuario autenticado, notificaciones de revocación (RTDN y Voided Purchases) y renovación de licencias. **La v23 sólo prepara la consulta de licencias, no el envío del token de compra.**
+5. Revisar y probar qué ocurre al cambiar de cuenta, cerrar sesión, reinstalar y usar sin Internet. El servidor sigue deshabilitado por defecto y la interfaz no usa la respuesta para abrir funciones de pago.
+6. Antes de comenzar distribución comercial, eliminar el interruptor de Premium de prueba de compilaciones Release y habilitar permisos sólo con una licencia verificada.
