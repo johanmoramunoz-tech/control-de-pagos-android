@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
   private String backup;
   private String reportContent;
   private Uri pendingPhoto;
+  private PlayBillingManager playBilling;
   private boolean isDebugBuild(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
   // Control de evaluación únicamente. No equivale a una licencia comercial.
   private boolean premiumPreview(){return isDebugBuild()&&getSharedPreferences("pagocheck_preview",MODE_PRIVATE).getBoolean("premium_enabled",false);}
@@ -86,6 +87,8 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new BackupBridge(),"AndroidBackup");
     web.addJavascriptInterface(new ReminderBridge(),"AndroidReminders");
     web.addJavascriptInterface(new LocalPremiumBridge(),"AndroidLocal");
+    web.addJavascriptInterface(new PlayBillingBridge(),"AndroidPlayBilling");
+    playBilling=new PlayBillingManager(this,json->sendAiCallback("receivePlayBillingStatus",json));
     ReminderScheduler.refresh(this);
     setContentView(web);
     try(InputStream in=getAssets().open("index.html")) {
@@ -161,6 +164,15 @@ public class MainActivity extends Activity {
         }catch(Exception e){sendAiCallback("receiveLocalError","No hay reconocimiento de voz compatible instalado.");}
       });
     }
+  }
+  public class PlayBillingBridge {
+    @JavascriptInterface public void status(){runOnUiThread(()->{if(playBilling!=null)playBilling.connect();});}
+    @JavascriptInterface public void refresh(){runOnUiThread(()->{if(playBilling!=null)playBilling.refresh();});}
+    @JavascriptInterface public void purchase(){runOnUiThread(()->{if(playBilling!=null)playBilling.purchase();});}
+  }
+  @Override protected void onResume(){
+    super.onResume();
+    if(playBilling!=null)playBilling.connect();
   }
   private void scanLocal(Uri uri){
     if(!premiumPreview()||uri==null)return;
@@ -278,6 +290,8 @@ public class MainActivity extends Activity {
     web.removeJavascriptInterface("AndroidBackup");
     web.removeJavascriptInterface("AndroidReminders");
     web.removeJavascriptInterface("AndroidLocal");
+    web.removeJavascriptInterface("AndroidPlayBilling");
+    if(playBilling!=null)playBilling.close();
     web.destroy();super.onDestroy();
   }
 }
