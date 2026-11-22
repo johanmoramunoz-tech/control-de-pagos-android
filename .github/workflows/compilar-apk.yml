@@ -31,9 +31,9 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/pagocheck-v18.js').write_text(js.group(1))
+          Path('/tmp/pagocheck-v19.js').write_text(js.group(1))
           PY
-          node --check /tmp/pagocheck-v18.js
+          node --check /tmp/pagocheck-v19.js
       - name: Preparar firma privada persistente
         env:
           CDP_KEYSTORE_B64: ${{ secrets.CDP_KEYSTORE_B64 }}
@@ -46,6 +46,8 @@ jobs:
           fi
           printf '%s' "$CDP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controlpagos-test.jks"
           echo "CDP_KEYSTORE_PATH=$RUNNER_TEMP/controlpagos-test.jks" >> "$GITHUB_ENV"
+      - name: Auditoría de integridad de datos y respaldos
+        run: node --test tests/auditoria-integridad.test.cjs
       - name: Verificar avisos nativos con confirmación y cancelación
         run: node --test tests/avisos-nativos.test.cjs
       - name: Probar distribución Gratis y Premium
@@ -64,6 +66,8 @@ jobs:
         env:
           CDP_STORE_PASSWORD: ${{ secrets.CDP_STORE_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug
+      - name: Comprobar compilación AAB no depurable de producción (sin firma de distribución)
+        run: gradle --no-daemon :app:bundleRelease
       - name: Verificar firma APK
         run: |
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
@@ -71,7 +75,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: PagoCheck-IA-v18-Avisos-Profesionales-APK
+          name: PagoCheck-IA-v19-Auditoria-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
