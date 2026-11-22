@@ -1,4 +1,4 @@
-# Control de Pagos Android v8
+# PagoCheck IA — proyecto Android v8
 
 Aplicación Android de prueba para presupuesto familiar local.
 
@@ -26,3 +26,13 @@ No hay conexión operativa con ChatGPT, Gemini, un servicio MCP propio ni servic
 - El repositorio debería configurarse como privado antes de añadir servicios o credenciales.
 - Los respaldos de prueba JSON no están cifrados.
 - No utilizar información financiera real sensible hasta completar cifrado, autenticación y pruebas.
+
+## Identidad de producto (noviembre 2026)
+**Nombre de trabajo: PagoCheck IA**. El nombre visible en Android y en el encabezado de la app se ha actualizado.
+El usuario proporcionó un icono original (cartera con visto y componentes tecnológicos, colores verde/turquesa/azul sobre fondo azul) y una imagen promocional con:
+- Escaneo de facturas e imágenes/PDF con IA (planificado, no operativo).
+- Registro por voz (dictado básico existente; IA pendiente).
+- Recordatorios de pago (prototipo Android).
+- Control de gastos e informes gráficos (prototipo local).
+La ficha futura de Google Play debe representar las funcionalidades que efectivamente estén implementadas. El material promocional contiene textos imprecisos en la pantalla simulada y no debe publicarse sin corregir.
+Pendiente: incorporar el archivo de ícono provisto como recurso binario de launcher en el repositorio y generar los recursos adaptativos definitivos; también verificar disponibilidad comercial del nombre/marca antes de publicar.
