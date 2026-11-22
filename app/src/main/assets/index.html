@@ -21,7 +21,7 @@ function migrate(){
    db.paymentChecks={};
    const totals={};
    for(const tx of db.transactions||[]){
-     if(tx.reversed||!tx.commitmentId||!['income','expense'].includes(tx.kind)||!/^\\d{4}-\\d{2}$/.test(tx.month||''))continue;
+     if(tx.reversed||!tx.commitmentId||!['income','expense'].includes(tx.kind)||!/^\d{4}-\d{2}$/.test(tx.month||''))continue;
      const k=tx.month+'|'+tx.commitmentId;
      totals[k]=(totals[k]||0)+Number(tx.amount||0);
    }
@@ -108,7 +108,7 @@ function ledger(){return db.transactions.filter(t=>t.month===month&&!t.reversed)
 function related(c){return ledger().filter(t=>t.commitmentId===c.id&&t.kind===c.kind)}
 function target(c){return Object.hasOwn(c.overrides||{},month)?c.overrides[month]:c.estimate}
 function executed(c){return related(c).reduce((a,t)=>a+t.amount,0)}
-function summary(){const c=currentCommitments(),tx=ledger(),plannedInc=c.filter(x=>x.kind==='income').reduce((a,x)=>a+target(x),0),plannedExp=c.filter(x=>x.kind==='expense').reduce((a,x)=>a+target(x),0),realInc=tx.filter(x=>x.kind==='income').reduce((a,x)=>a+x.amount,0),realExp=tx.filter(x=>x.kind==='expense').reduce((a,x)=>a+x.amount,0);return {plannedInc,plannedExp,realInc,realExp,pending:c.filter(x=>x.kind==='expense').reduce((a,x)=>a+Math.max(0,target(x)-executed(x)),0),c,tx}}
+function summary(){const c=currentCommitments(),tx=ledger(),plannedInc=c.filter(x=>x.kind==='income').reduce((a,x)=>a+target(x),0),plannedExp=c.filter(x=>x.kind==='expense').reduce((a,x)=>a+target(x),0),realInc=tx.filter(x=>x.kind==='income').reduce((a,x)=>a+x.amount,0),realExp=tx.filter(x=>x.kind==='expense').reduce((a,x)=>a+x.amount,0);return {plannedInc,plannedExp,realInc,realExp,pending:c.filter(x=>x.kind==='expense'&&!checked(x)).reduce((a,x)=>a+Math.max(0,target(x)-executed(x)),0),pendingCount:c.filter(x=>x.kind==='expense'&&!checked(x)).length,c,tx}}
 function tile(label,n){return `<div class="tile"><small>${label}</small><strong>${crc(n)}</strong></div>`}
 function section(title,button='',kind=''){return `<div class="head"><h2>${title}</h2>${button?`<button class="button" data-add="${kind}">${button}</button>`:''}</div>`}
 function reminderLabel(c){if(c.kind!=='expense')return '';const r=c.reminders||{};let a=[];if(r.planned?.enabled)a.push('Proyectado: '+r.planned.before+' días antes');if(r.due?.enabled)a.push('Límite: '+r.due.before+' días antes');return a.length?' · 🔔 '+a.join(' / '):''}
@@ -181,7 +181,7 @@ function graphicsFor(s){
 
 function render(){const s=summary();$('currentMonth').textContent=new Date(Number(month.slice(0,4)),Number(month.slice(5,7))-1,1).toLocaleDateString('es-CR',{month:'long',year:'numeric'});document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));let html='';if(tab==='home'){
  const chooser='<div class="viewchooser"><strong>Resumen del mes</strong><div><button type="button" class="modebtn '+(viewMode==='numeric'?'active':'')+'" data-viewmode="numeric">Números</button> <button type="button" class="modebtn '+(viewMode==='graphic'?'active':'')+'" data-viewmode="graphic">Gráficos</button></div></div>';
- const numbers=`<div class="grid">${tile('Ingresos proyectados',s.plannedInc)}${tile('Gastos proyectados',s.plannedExp)}${tile('Ingresos recibidos',s.realInc)}${tile('Gastos ejecutados',s.realExp)}${tile('Balance mensual',s.realInc-s.realExp)}${db.opening?tile('Saldo disponible estimado',balanceAt(month)):tile('Saldo inicial pendiente',0)}${tile('Compromisos pendientes',s.pending)}</div><p class="muted">El saldo disponible es estimado y no está conciliado con las cuentas bancarias.</p>`;
+ const numbers=`<div class="grid">${tile('Ingresos proyectados',s.plannedInc)}${tile('Gastos proyectados',s.plannedExp)}${tile('Ingresos recibidos',s.realInc)}${tile('Gastos ejecutados',s.realExp)}${tile('Balance mensual',s.realInc-s.realExp)}${db.opening?tile('Saldo disponible estimado',balanceAt(month)):tile('Saldo inicial pendiente',0)}${tile('Monto pendiente',s.pending)}<div class="tile"><small>Pagos sin confirmar</small><strong>${s.pendingCount}</strong></div></div><p class="muted">El saldo disponible es estimado y no está conciliado con las cuentas bancarias.</p>`;
  html=chooser+(viewMode==='numeric'?numbers:graphicsFor(s))+`${section('Pagos del mes','+ Añadir compromiso','expense')}${monthlyBoard(s.c)}${section('Movimientos recientes')}${listTransactions(s.tx.slice(-5))}`;
 }
 if(tab==='obligations'){html=`${section('Ingresos proyectados','+ Ingreso','income')}${listCommitments(s.c.filter(c=>c.kind==='income'))}${section('Gastos obligatorios','+ Gasto','expense')}${listCommitments(s.c.filter(c=>c.kind==='expense'))}`}
@@ -210,7 +210,7 @@ function finishPayment(id){
  if(locked())return;
  const c=currentCommitments().find(x=>x.id===id&&x.kind==='expense');if(!c||checked(c))return;
  const planned=target(c),already=executed(c),difference=planned-already;
- if(!Number.isSafeInteger(planned)||planned<=0||already>planned){openPaymentAdjustment(id);return;}
+ if(!Number.isSafeInteger(planned)||planned<=0||already>planned||month!==monthNow()){openPaymentAdjustment(id);return;}
  if(!confirm('¿Confirmas que «'+c.name+'» se pagó completamente por '+crc(planned)+' este mes?'+(already>0?'\nYa existen abonos por '+crc(already)+'. Solo se registrará la diferencia de '+crc(difference)+'.':'')))return;
  if(checked(c))return;
  if(difference>0){
