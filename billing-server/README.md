@@ -1,6 +1,6 @@
-# PagoCheck IA — Verificación de licencias Google Play (v21, PREPARACIÓN)
+# PagoCheck IA — Verificación de licencias Google Play (v22, PREPARACIÓN)
 
-**Estado:** código de backend creado; **no desplegado**, sin credenciales, sin vinculación de cuentas Android y sin compras habilitadas.
+**Estado:** backend con protecciones reforzadas, **no desplegado**, sin credenciales, sin vinculación de cuentas Android y sin compras habilitadas.
 
 ## Componentes incluidos
 - `verify-purchase.cjs`: valida formato de token, producto, estado PURCHASED/PENDING/CANCELLED y consumo.
@@ -32,3 +32,18 @@ La licencia **no se concede** sólo porque la app informe `PURCHASED`, ni por la
 - `POST /androidpublisher/v3/applications/{packageName}/purchases/products/{productId}/tokens/{token}:acknowledge`
 
 Nota: Google Play exige reconocer las compras confirmadas oportunamente; las transacciones PENDING no se reconocen como completadas.
+
+## Verificaciones incorporadas en v22
+- El backend devuelve HTTP 503 en todos los endpoints de licencia mientras `LICENSE_VERIFICATION_ENABLED` no sea exactamente `true`. Activar esa variable NO basta para poder publicar: requiere los elementos de la lista anterior y revisión de seguridad externa.
+- Tokens no válidos, compras pendientes, canceladas, consumidas o con estado de consumo no determinado se rechazan ANTES de asociar el token a una cuenta.
+- `firestore.rules` niega lectura/escritura directa a clientes sobre `play_purchases` y `premium_users`. Deben aplicarse efectivamente al proyecto Firebase cuando se configure; el archivo en GitHub por sí solo no las activa.
+- El estado de compra se consulta a la API oficial de Google; `purchases.productsv2` no sustituye la Voided Purchases API para revocaciones y devoluciones.
+- Las compras y las cuentas en Android aún NO están conectadas a este backend. No activar el cobro ni tratar la integración como producción.
+- Por seguridad, nunca pegar claves de servicio ni tokens de compra en mensajes o archivos públicos.
+
+## Datos que deben configurarse fuera del repositorio
+- ID de proyecto Firebase y configuración Android correspondiente, mediante el proceso oficial de Firebase.
+- Enlace a la cuenta Play Console y producto no consumible `pagocheck_premium_unico`.
+- Servicio privado HTTPS con identidad administrada y acceso exclusivo a Android Publisher API y Firestore.
+- Políticas de privacidad, tratamiento de reembolsos, eliminación de cuenta, retención de datos y canal de soporte.
+- Aprobación de los mecanismos de prueba de compras y licencias de Google Play.
