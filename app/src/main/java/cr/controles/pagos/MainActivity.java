@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
   private boolean isDebugBuild(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
   // Control de evaluación únicamente. No equivale a una licencia comercial.
   private boolean premiumPreview(){return isDebugBuild()&&getSharedPreferences("pagocheck_preview",MODE_PRIVATE).getBoolean("premium_enabled",false);}
+  private boolean hasPremiumAccess(){return premiumPreview()||(licenseAccount!=null&&licenseAccount.hasVerifiedLicense());}
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     getWindow().setStatusBarColor(Color.rgb(16,25,43));
@@ -91,7 +92,9 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new PlayBillingBridge(),"AndroidPlayBilling");
     web.addJavascriptInterface(new LicenseAccountBridge(),"AndroidLicenseAccount");
     licenseAccount=new LicenseAccountManager(this,json->sendAiCallback("receiveLicenseAccountStatus",json));
-    playBilling=new PlayBillingManager(this,json->sendAiCallback("receivePlayBillingStatus",json));
+    playBilling=new PlayBillingManager(this,json->sendAiCallback("receivePlayBillingStatus",json),token->{
+      if(licenseAccount!=null)licenseAccount.verifyPurchase(token);
+    });
     ReminderScheduler.refresh(this);
     setContentView(web);
     try(InputStream in=getAssets().open("index.html")) {
@@ -119,7 +122,7 @@ public class MainActivity extends Activity {
   public class LocalPremiumBridge {
     @JavascriptInterface public void status(){
       JSONObject o=new JSONObject();
-      try{o.put("available",premiumPreview()).put("preview",isDebugBuild())
+      try{o.put("available",hasPremiumAccess()).put("preview",isDebugBuild())
           .put("recognition","ML Kit OCR integrado").put("billingActive",false);}
       catch(Exception ignored){}
       sendAiCallback("receiveLocalStatus",o.toString());
@@ -131,7 +134,7 @@ public class MainActivity extends Activity {
       status();
     }
     @JavascriptInterface public void gallery(){
-      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      if(!hasPremiumAccess()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
       runOnUiThread(()->{
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -142,7 +145,7 @@ public class MainActivity extends Activity {
       });
     }
     @JavascriptInterface public void camera(){
-      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      if(!hasPremiumAccess()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
       runOnUiThread(()->{
         try{
           File photo=File.createTempFile("pagocheck_recibo_",".jpg",getCacheDir());
@@ -155,7 +158,7 @@ public class MainActivity extends Activity {
       });
     }
     @JavascriptInterface public void speech(){
-      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      if(!hasPremiumAccess()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
       runOnUiThread(()->{
         try{
           Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -188,6 +191,12 @@ public class MainActivity extends Activity {
   public class PlayBillingBridge {
     @JavascriptInterface public void status(){runOnUiThread(()->{if(playBilling!=null)playBilling.connect();});}
     @JavascriptInterface public void refresh(){runOnUiThread(()->{if(playBilling!=null)playBilling.refresh();});}
+    @JavascriptInterface public void restorePurchase(){runOnUiThread(()->{
+      if(licenseAccount!=null&&!licenseAccount.readyForPurchaseVerification()){
+        licenseAccount.refreshLicense();return;
+      }
+      if(playBilling!=null)playBilling.verifyOwnedPurchases();
+    });}
     @JavascriptInterface public void purchase(){runOnUiThread(()->{if(playBilling!=null)playBilling.purchase();});}
   }
   @Override protected void onResume(){
@@ -195,7 +204,7 @@ public class MainActivity extends Activity {
     if(playBilling!=null)playBilling.connect();
   }
   private void scanLocal(Uri uri){
-    if(!premiumPreview()||uri==null)return;
+    if(!hasPremiumAccess()||uri==null)return;
     sendAiCallback("receiveLocalProgress","Leyendo fotografía en este dispositivo...");
     LocalOcr.analyze(this,uri,new LocalOcr.Listener(){
       @Override public void success(String proposal){sendAiCallback("receiveLocalProposal",proposal);}
@@ -208,7 +217,7 @@ public class MainActivity extends Activity {
   }
   public class VoiceBridge {
     @JavascriptInterface public void startSpeechRecognition(){
-      if(!premiumPreview()){sendAiCallback("receiveLocalError","El dictado asistido pertenece a Premium.");return;}
+      if(!hasPremiumAccess()){sendAiCallback("receiveLocalError","El dictado asistido pertenece a Premium.");return;}
       runOnUiThread(()->{
         try{
           Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
