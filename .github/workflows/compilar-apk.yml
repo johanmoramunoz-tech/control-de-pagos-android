@@ -33,7 +33,7 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/control-pagos-v6.js').write_text(js.group(1))
+          Path('/tmp/control-pagos-v7.js').write_text(js.group(1))
           PY
           node --check /tmp/control-pagos-v6.js
       - name: Compilar APK debug
@@ -41,7 +41,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: Control-de-Pagos-v6-APK-prueba
+          name: Control-de-Pagos-v7-APK-prueba
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
