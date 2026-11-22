@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
     if(uri==null)return;
     if(request==AI_IMAGE){
       String mime=getContentResolver().getType(uri);
-      if(!("image/jpeg".equals(mime)||"image/png".equals(mime)||"image/webp".equals(mime)){
+      if(!("image/jpeg".equals(mime)||"image/png".equals(mime)||"image/webp".equals(mime))){
         sendAiCallback("receiveAIError","Selecciona JPG, PNG o WebP.");return;
       }
       aiWorkers.execute(()->{
