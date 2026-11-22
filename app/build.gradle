@@ -1,5 +1,34 @@
 plugins { id 'com.android.application' }
-android { namespace 'cr.controles.pagos'; compileSdk 35
- defaultConfig { applicationId 'cr.controles.pagos'; minSdk 24; targetSdk 35; versionCode 7; versionName '7.0-prueba' }
- compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+def stableKeyPath = System.getenv('CDP_KEYSTORE_PATH')
+def stablePass = System.getenv('CDP_STORE_PASSWORD')
+android {
+ namespace 'cr.controles.pagos'
+ compileSdk 35
+ defaultConfig {
+  applicationId 'cr.controles.pagos'
+  minSdk 24
+  targetSdk 35
+  versionCode 8
+  versionName '8.0-prueba'
+ }
+ signingConfigs {
+  if(stableKeyPath && stablePass) {
+   stableTest {
+    storeFile file(stableKeyPath)
+    storePassword stablePass
+    keyAlias 'controlpagos'
+    keyPassword stablePass
+    storeType 'pkcs12'
+   }
+  }
+ }
+ buildTypes {
+  debug {
+   if(stableKeyPath && stablePass) signingConfig signingConfigs.stableTest
+  }
+ }
+ compileOptions {
+  sourceCompatibility JavaVersion.VERSION_17
+  targetCompatibility JavaVersion.VERSION_17
+ }
 }
