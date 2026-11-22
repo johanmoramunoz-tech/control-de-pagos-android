@@ -31,9 +31,9 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/pagocheck-v16.js').write_text(js.group(1))
+          Path('/tmp/pagocheck-v17.js').write_text(js.group(1))
           PY
-          node --check /tmp/pagocheck-v16.js
+          node --check /tmp/pagocheck-v17.js
       - name: Preparar firma privada persistente
         env:
           CDP_KEYSTORE_B64: ${{ secrets.CDP_KEYSTORE_B64 }}
@@ -46,6 +46,8 @@ jobs:
           fi
           printf '%s' "$CDP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controlpagos-test.jks"
           echo "CDP_KEYSTORE_PATH=$RUNNER_TEMP/controlpagos-test.jks" >> "$GITHUB_ENV"
+      - name: Probar distribución Gratis y Premium
+        run: node --test tests/planes-ia-premium.test.cjs
       - name: Probar importes y fechas escritos
         run: node --test tests/entrada-montos-fechas.test.cjs
       - name: Probar presupuestos y subcategorías
@@ -67,7 +69,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: PagoCheck-IA-v16-Montos-Fechas-Prueba
+          name: PagoCheck-IA-v17-Gratis-Premium-Demo-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
