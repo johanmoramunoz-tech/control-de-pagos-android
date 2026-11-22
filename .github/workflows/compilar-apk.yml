@@ -33,7 +33,7 @@ jobs:
           if not js: raise SystemExit('No se encontró JavaScript')
           Path('/tmp/pagocheck-v22.js').write_text(js.group(1))
           PY
-          node --check /tmp/pagocheck-v21.js
+          node --check /tmp/pagocheck-v22.js
       - name: Preparar firma privada persistente
         env:
           CDP_KEYSTORE_B64: ${{ secrets.CDP_KEYSTORE_B64 }}
