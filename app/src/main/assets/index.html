@@ -143,7 +143,8 @@ function budgetList(){
 function budgetFormOptions(kind,selectedBudgetId='',selectedCategory=''){
  if(kind!=='expense')return '';
  const opts=activeBudgets().filter(b=>!selectedCategory||b.category===selectedCategory||b.id===selectedBudgetId);
- const list=['<option value="">Sin presupuesto de consumo</option>'].concat(opts.map(b=>'<option value="'+safe(b.id)+'" '+(selectedBudgetId===b.id?'selected':'')+'>'+safe(b.name)+' · '+crc(Math.max(0,budgetLimit(b)-budgetUsed(b)))+' disponible</option>'));
+ if(!selectedBudgetId&&selectedCategory&&opts.length===1)selectedBudgetId=opts[0].id;
+ const list=['<option value="">Asignación automática por categoría (sin subcategoría)</option>'].concat(opts.map(b=>'<option value="'+safe(b.id)+'" '+(selectedBudgetId===b.id?'selected':'')+'>'+safe(b.name)+' · '+crc(Math.max(0,budgetLimit(b)-budgetUsed(b)))+' disponible</option>'));
  return '<div class="formrow"><label for="f_budget">Presupuesto que recibe el gasto</label><select id="f_budget">'+list.join('')+'</select></div><div id="subcategoryContainer"></div>';
 }
 function budgetSubcategorySelect(id,selected=''){
@@ -167,7 +168,7 @@ function refreshBudgetChoices(selected='',subcategory=''){
 function budgetChoice(kind,category){
  if(kind!=='expense')return {budgetId:null,subcategory:''};
  const id=$('f_budget')?.value||null;
- const b=id?activeBudgets().find(x=>x.id===id):null;
+ const b=id?activeBudgets().find(x=>x.id===id):activeBudgets().find(x=>x.category===category)||null;
  if(id&&(!b||b.category!==category)){alert('El presupuesto seleccionado no corresponde a la categoría del gasto.');return null}
  return {budgetId:b?.id||null,subcategory:b?($('f_subcategory')?.value||''):''};
 }
