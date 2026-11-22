@@ -24,8 +24,10 @@ final class PlayBillingManager implements PurchasesUpdatedListener {
     static final String PREMIUM_ID="pagocheck_premium_unico";
     static final boolean LIVE_PURCHASES_ENABLED=false;
     interface Listener { void onUpdate(String json); }
+    interface VerifiedPurchaseRequest { void onPurchaseToken(String token); }
     private final Activity activity;
     private final Listener listener;
+    private final VerifiedPurchaseRequest verification;
     private final BillingClient client;
     private ProductDetails product;
     private String offerToken;
@@ -35,8 +37,8 @@ final class PlayBillingManager implements PurchasesUpdatedListener {
     private boolean ownedOnPlay=false;
     private boolean pending=false;
 
-    PlayBillingManager(Activity activity,Listener listener){
-        this.activity=activity;this.listener=listener;
+    PlayBillingManager(Activity activity,Listener listener,VerifiedPurchaseRequest verification){
+        this.activity=activity;this.listener=listener;this.verification=verification;
         client=BillingClient.newBuilder(activity)
             .setListener(this)
             .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
@@ -70,6 +72,28 @@ final class PlayBillingManager implements PurchasesUpdatedListener {
                 message="No fue posible recuperar las compras de Google Play";publish();return;
             }
             updatePurchases(purchases);
+        });
+    }
+    /**
+     * Recuperación explícita de compras. Sólo se envía un token confirmado
+     * a la capa nativa de licencias; nunca a JavaScript.
+     */
+    void verifyOwnedPurchases(){
+        if(!client.isReady()){message="Google Play no conectado";publish();return;}
+        QueryPurchasesParams args=QueryPurchasesParams.newBuilder()
+          .setProductType(BillingClient.ProductType.INAPP).build();
+        client.queryPurchasesAsync(args,(result,purchases)->{
+            if(result.getResponseCode()!=BillingClient.BillingResponseCode.OK){
+                message="No fue posible consultar compras anteriores";publish();return;
+            }
+            updatePurchases(purchases);
+            if(purchases!=null)for(Purchase purchase:purchases){
+                if(purchase.getProducts().contains(PREMIUM_ID)&&
+                   purchase.getPurchaseState()==Purchase.PurchaseState.PURCHASED){
+                    verification.onPurchaseToken(purchase.getPurchaseToken());
+                    return;
+                }
+            }
         });
     }
     private void queryProduct(){
@@ -131,6 +155,11 @@ final class PlayBillingManager implements PurchasesUpdatedListener {
     @Override public void onPurchasesUpdated(BillingResult result,List<Purchase> purchases){
         if(result.getResponseCode()==BillingClient.BillingResponseCode.OK){
             updatePurchases(purchases);
+            if(purchases!=null)for(Purchase purchase:purchases){
+                if(purchase.getProducts().contains(PREMIUM_ID)&&
+                   purchase.getPurchaseState()==Purchase.PurchaseState.PURCHASED)
+                    verification.onPurchaseToken(purchase.getPurchaseToken());
+            }
             // Reconsultar evita inferir propiedad únicamente del callback.
             if(client.isReady())refresh();
         }else if(result.getResponseCode()!=BillingClient.BillingResponseCode.USER_CANCELED){
