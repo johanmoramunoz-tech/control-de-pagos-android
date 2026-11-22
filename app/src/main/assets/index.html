@@ -270,11 +270,11 @@ function monthlyBoard(arr){
 function listCommitments(arr){
  if(!arr.length)return '<div class="empty">Todavía no hay compromisos para este mes.</div>';
  return '<div class="entries">'+arr.map(c=>{
-  const amount=target(c),paid=executed(c),done=checked(c),st=status(c);
+  const amount=target(c),paid=executed(c),done=checked(c),st=c.budgetManaged?'Presupuesto':status(c);
   return '<article class="item"><div class="symbol">'+safe(iconFor(c.category,c.kind))+'</div><div class="body"><div class="name">'+safe(c.name)+' <span class="status '+(!done?'warn':'')+'">'+st+'</span></div>'+
   '<div class="sub">'+safe(c.category)+' · '+(c.kind==='income'?'Ingreso día '+c.due:'Corte '+(c.cut||'—')+' · Vence '+c.due)+'<br>Previsto '+crc(amount)+' · Registrado '+crc(paid)+(c.kind==='expense'?' · Pendiente '+crc(Math.max(0,amount-paid)):'')+'</div>'+
   '<div class="progress"><div style="width:'+Math.max(0,Math.min(100,amount?paid/amount*100:paid?100:0))+'%"></div></div>'+
-  '<div class="actions">'+(done?'<span class="monthly-ok">✓ Confirmado</span>':c.kind==='expense'?'<button class="mini monthly-check" data-checkpay="'+safe(c.id)+'">✓ Pagado</button><button class="mini" data-adjustpay="'+safe(c.id)+'">Ajustar / seguimiento</button>':'<button class="mini" data-abono="'+safe(c.id)+'">Registrar ingreso</button>')+
+  '<div class="actions">'+(c.budgetManaged?'<span class="monthly-ok">Controlar desde Presupuestos</span>':done?'<span class="monthly-ok">✓ Confirmado</span>':c.kind==='expense'?'<button class="mini monthly-check" data-checkpay="'+safe(c.id)+'">✓ Pagado</button><button class="mini" data-adjustpay="'+safe(c.id)+'">Ajustar / seguimiento</button>':'<button class="mini" data-abono="'+safe(c.id)+'">Registrar ingreso</button>')+
   '<button class="mini" data-edit="'+safe(c.id)+'">Editar compromiso</button></div></div></article>';
  }).join('')+'</div>';
 }
@@ -333,7 +333,7 @@ if(reminders&&(reminders.planned.enabled||reminders.due.enabled))window.AndroidR
 function addTx(t){db.transactions.push({id:uuid(),recordedAt:new Date().toISOString(),month:month,...t,reversed:false});logging('Movimiento registrado',{month,source:t.source,kind:t.kind});return persist()}
 function finishPayment(id){
  if(locked())return;
- const c=currentCommitments().find(x=>x.id===id&&x.kind==='expense');if(!c||checked(c))return;
+ const c=currentCommitments().find(x=>x.id===id&&x.kind==='expense'&&!x.budgetManaged);if(!c||checked(c))return;
  const planned=target(c),already=executed(c),difference=planned-already;
  if(!Number.isSafeInteger(planned)||planned<=0||already>planned||month!==monthNow()){openPaymentAdjustment(id);return;}
  if(!confirm('¿Confirmas que «'+c.name+'» se pagó completamente por '+crc(planned)+' este mes?'+(already>0?'\nYa existen abonos por '+crc(already)+'. Solo se registrará la diferencia de '+crc(difference)+'.':'')))return;
@@ -347,7 +347,7 @@ function finishPayment(id){
 }
 function openPaymentAdjustment(id){
  if(locked())return;
- const c=currentCommitments().find(x=>x.id===id&&x.kind==='expense');if(!c||checked(c))return;
+ const c=currentCommitments().find(x=>x.id===id&&x.kind==='expense'&&!x.budgetManaged);if(!c||checked(c))return;
  const already=executed(c),planned=target(c);
  popup('Ajustar / seguimiento del pago',
  '<p class="muted"><strong>'+safe(c.name)+'</strong> · Previsto '+crc(planned)+' · Abonos '+crc(already)+'. Ajustar aquí solo afecta el mes seleccionado; no cambia la proyección de meses posteriores.</p>'+
