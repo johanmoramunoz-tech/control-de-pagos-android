@@ -31,7 +31,7 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/pagocheck-v21.js').write_text(js.group(1))
+          Path('/tmp/pagocheck-v22.js').write_text(js.group(1))
           PY
           node --check /tmp/pagocheck-v21.js
       - name: Preparar firma privada persistente
@@ -51,6 +51,8 @@ jobs:
           node --check billing-server/server.cjs
           node --check billing-server/verify-purchase.cjs
           node --test tests/billing-backend.test.cjs
+          node --test tests/billing-endpoints.test.cjs
+          test -f billing-server/firestore.rules
       - name: Comprobar protección de compras y licencias
         run: node --test tests/play-billing-seguridad.test.cjs
       - name: Auditoría de integridad de datos y respaldos
@@ -82,7 +84,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: PagoCheck-IA-v21-Licencias-Preparadas-APK
+          name: PagoCheck-IA-v22-Licencias-Protegidas-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
