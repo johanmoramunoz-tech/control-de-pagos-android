@@ -117,6 +117,14 @@ public final class ReminderScheduler {
         return null;
     }
     static boolean isPaid(JSONObject c,JSONObject data,String month){
+        // El usuario confirma expresamente el pago completo; los abonos no lo liquidan.
+        JSONObject monthChecks=data.optJSONObject("paymentChecks");
+        if(monthChecks!=null){
+            JSONObject monthData=monthChecks.optJSONObject(month);
+            JSONObject check=monthData==null?null:monthData.optJSONObject(c.optString("id"));
+            return check!=null && check.optBoolean("complete",false);
+        }
+        // Compatibilidad con registros anteriores a la versión 13.
         double target=c.optDouble("estimate",0);
         JSONObject overrides=c.optJSONObject("overrides");
         if(overrides!=null&&overrides.has(month))target=overrides.optDouble(month,target);
