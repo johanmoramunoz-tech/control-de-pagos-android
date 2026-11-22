@@ -5,6 +5,10 @@ import android.os.Build;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.provider.MediaStore;
+import androidx.core.content.FileProvider;
+import java.io.File;
 import android.speech.RecognizerIntent;
 import java.util.ArrayList;
 import android.net.Uri;
@@ -24,16 +28,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-  private static final int EXPORT=10, IMPORT=11, VOICE=12, AI_IMAGE=13;
+  private static final int EXPORT=10, IMPORT=11, VOICE=12, AI_IMAGE=13, LOCAL_GALLERY=14, LOCAL_PHOTO=15, LOCAL_VOICE=16;
   private final ExecutorService aiWorkers=Executors.newSingleThreadExecutor();
   private AiService aiService;
   private WebView web;
   private String backup;
+  private Uri pendingPhoto;
+  private boolean premiumPreview(){return (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;}
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     getWindow().setStatusBarColor(Color.rgb(16,25,43));
     getWindow().setNavigationBarColor(Color.rgb(16,25,43));
     aiService=new AiService(this);
+    if(state!=null){String image=state.getString("pagocheck_camera_uri");if(image!=null)pendingPhoto=Uri.parse(image);}
     web=new WebView(this);
     web.getSettings().setJavaScriptEnabled(true);
     web.getSettings().setDomStorageEnabled(true);
@@ -45,6 +52,7 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new BackupBridge(),"AndroidBackup");
     web.addJavascriptInterface(new ReminderBridge(),"AndroidReminders");
     web.addJavascriptInterface(new AiBridge(),"AndroidBYOK");
+    web.addJavascriptInterface(new LocalPremiumBridge(),"AndroidLocal");
     ReminderScheduler.refresh(this);
     setContentView(web);
     try(InputStream in=getAssets().open("index.html")) {
@@ -102,6 +110,64 @@ public class MainActivity extends Activity {
       });
     }
   }
+  public class LocalPremiumBridge {
+    @JavascriptInterface public void status(){
+      JSONObject o=new JSONObject();
+      try{o.put("available",premiumPreview()).put("preview",premiumPreview())
+          .put("recognition","ML Kit OCR integrado").put("billingActive",false);}
+      catch(Exception ignored){}
+      sendAiCallback("receiveLocalStatus",o.toString());
+    }
+    @JavascriptInterface public void gallery(){
+      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      runOnUiThread(()->{
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/jpeg","image/png","image/webp"});
+        try{startActivityForResult(intent,LOCAL_GALLERY);}
+        catch(Exception e){sendAiCallback("receiveLocalError","No fue posible abrir la galería.");}
+      });
+    }
+    @JavascriptInterface public void camera(){
+      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      runOnUiThread(()->{
+        try{
+          File photo=File.createTempFile("pagocheck_recibo_",".jpg",getCacheDir());
+          pendingPhoto=FileProvider.getUriForFile(MainActivity.this,getPackageName()+".fileprovider",photo);
+          Intent intent=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+          intent.putExtra(MediaStore.EXTRA_OUTPUT,pendingPhoto);
+          intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+          startActivityForResult(intent,LOCAL_PHOTO);
+        }catch(Exception e){sendAiCallback("receiveLocalError","La cámara no está disponible.");}
+      });
+    }
+    @JavascriptInterface public void speech(){
+      if(!premiumPreview()){sendAiCallback("receiveLocalError","Premium no activado.");return;}
+      runOnUiThread(()->{
+        try{
+          Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+          intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+          intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"es-CR");
+          intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
+          intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Indica el importe y el concepto");
+          startActivityForResult(intent,LOCAL_VOICE);
+        }catch(Exception e){sendAiCallback("receiveLocalError","No hay reconocimiento de voz compatible instalado.");}
+      });
+    }
+  }
+  private void scanLocal(Uri uri){
+    if(!premiumPreview()||uri==null)return;
+    sendAiCallback("receiveLocalProgress","Leyendo fotografía en este dispositivo...");
+    LocalOcr.analyze(this,uri,new LocalOcr.Listener(){
+      @Override public void success(String proposal){sendAiCallback("receiveLocalProposal",proposal);}
+      @Override public void failure(String reason){sendAiCallback("receiveLocalError",reason);}
+    });
+  }
+  @Override protected void onSaveInstanceState(Bundle state){
+    if(pendingPhoto!=null)state.putString("pagocheck_camera_uri",pendingPhoto.toString());
+    super.onSaveInstanceState(state);
+  }
   public class VoiceBridge {
     @JavascriptInterface public void startSpeechRecognition(){
       runOnUiThread(()->{
@@ -137,7 +203,17 @@ public class MainActivity extends Activity {
   }
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);
-    if(result!=RESULT_OK||data==null)return;
+    if(result!=RESULT_OK)return;
+    if(request==LOCAL_PHOTO){scanLocal(pendingPhoto);return;}
+    if(data==null)return;
+    if(request==LOCAL_GALLERY){scanLocal(data.getData());return;}
+    if(request==LOCAL_VOICE){
+      ArrayList<String> speech=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+      if(speech==null||speech.isEmpty()){sendAiCallback("receiveLocalError","No se reconoció ninguna frase.");return;}
+      try{sendAiCallback("receiveLocalProposal",LocalReceiptParser.parseSpeech(speech.get(0)).toString());}
+      catch(Exception e){sendAiCallback("receiveLocalError",e.getMessage());}
+      return;
+    }
     if(request==VOICE){
       ArrayList<String> words=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
       if(words!=null&&!words.isEmpty()){
@@ -190,6 +266,7 @@ public class MainActivity extends Activity {
     web.removeJavascriptInterface("AndroidBackup");
     web.removeJavascriptInterface("AndroidReminders");
     web.removeJavascriptInterface("AndroidBYOK");
+    web.removeJavascriptInterface("AndroidLocal");
     aiWorkers.shutdownNow();
     web.destroy();super.onDestroy();
   }
