@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // La información de licencias sólo se administra desde el backend con
+    // Firebase Admin SDK e identidad de servicio. Los usuarios nunca pueden
+    // leer, crear o editar compras, tokens ni derechos directamente.
+    match /play_purchases/{document=**} {
+      allow read, write: if false;
+    }
+    match /premium_users/{document=**} {
+      allow read, write: if false;
+    }
+    // Denegación por defecto para todas las demás colecciones.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
