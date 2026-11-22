@@ -31,9 +31,9 @@ jobs:
           html=Path('app/src/main/assets/index.html').read_text()
           js=re.search(r'<script>([\s\S]*?)</script>',html)
           if not js: raise SystemExit('No se encontró JavaScript')
-          Path('/tmp/pagocheck-v12.js').write_text(js.group(1))
+          Path('/tmp/pagocheck-v13.js').write_text(js.group(1))
           PY
-          node --check /tmp/pagocheck-v12.js
+          node --check /tmp/pagocheck-v13.js
       - name: Preparar firma privada persistente
         env:
           CDP_KEYSTORE_B64: ${{ secrets.CDP_KEYSTORE_B64 }}
@@ -59,7 +59,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: PagoCheck-IA-v12-OCR-Local-Premium-Prueba
+          name: PagoCheck-IA-v13-Pagos-Mensuales-Prueba
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
