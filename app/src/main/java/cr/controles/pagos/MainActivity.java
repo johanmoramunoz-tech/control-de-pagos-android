@@ -1,5 +1,8 @@
 package cr.controles.pagos;
 import android.app.Activity;
+import android.Manifest;
+import android.os.Build;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.content.Intent;
 import android.speech.RecognizerIntent;
@@ -33,6 +36,8 @@ public class MainActivity extends Activity {
     web.setWebChromeClient(new WebChromeClient());
     web.addJavascriptInterface(new VoiceBridge(),"AndroidAI");
     web.addJavascriptInterface(new BackupBridge(),"AndroidBackup");
+    web.addJavascriptInterface(new ReminderBridge(),"AndroidReminders");
+    ReminderScheduler.refresh(this);
     setContentView(web);
     try(InputStream in=getAssets().open("index.html")) {
       byte[] data=new byte[in.available()];
@@ -40,6 +45,18 @@ public class MainActivity extends Activity {
       while(n<data.length && (r=in.read(data,n,data.length-n))>0)n+=r;
       web.loadDataWithBaseURL("https://controlpagos.local/",new String(data,StandardCharsets.UTF_8),"text/html","UTF-8",null);
     }catch(Exception e){Toast.makeText(this,"Error al abrir Control de Pagos",Toast.LENGTH_LONG).show();}
+  }
+  public class ReminderBridge {
+    @JavascriptInterface public void sync(String state){
+      ReminderScheduler.saveAndRefresh(getApplicationContext(),state);
+    }
+    @JavascriptInterface public void requestPermission(){
+      runOnUiThread(()->{
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
+          requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},77);
+        }
+      });
+    }
   }
   public class VoiceBridge {
     @JavascriptInterface public void startSpeechRecognition(){
@@ -110,6 +127,7 @@ public class MainActivity extends Activity {
   @Override protected void onDestroy(){
     web.removeJavascriptInterface("AndroidAI");
     web.removeJavascriptInterface("AndroidBackup");
+    web.removeJavascriptInterface("AndroidReminders");
     web.destroy();super.onDestroy();
   }
 }
