@@ -12,9 +12,16 @@ function hashToken(token){
 function assessPurchase(purchase){
  const state=purchase?.purchaseStateContext?.purchaseState;
  const matching=Array.isArray(purchase?.productLineItem) &&
-  purchase.productLineItem.some(i=>i.productId===PRODUCT_ID &&
-   i.productOfferDetails?.consumptionState!=='CONSUMPTION_STATE_CONSUMED');
+  purchase.productLineItem.find(i=>i.productId===PRODUCT_ID);
  if(!matching)return {valid:false,reason:'wrong_product'};
+ // Fallar cerrado si Google no devuelve un estado de consumo claro.
+ const offer=matching.productOfferDetails;
+ if(!offer||offer.consumptionState!=='CONSUMPTION_STATE_YET_TO_BE_CONSUMED')
+  return {valid:false,reason:'consumed_or_unknown'};
+ // Si Google informa que no quedan unidades reembolsables, no conceder acceso
+ // hasta reconciliar el estado de anulación mediante Voided Purchases.
+ if(offer.refundableQuantity===0&&offer.quantity>0)
+  return {valid:false,reason:'possible_refund'};
  if(state==='PENDING')return {valid:false,reason:'pending'};
  if(state==='CANCELLED')return {valid:false,reason:'cancelled'};
  if(state!=='PURCHASED')return {valid:false,reason:'unknown_state'};
