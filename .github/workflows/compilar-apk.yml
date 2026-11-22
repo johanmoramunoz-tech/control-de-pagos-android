@@ -46,6 +46,8 @@ jobs:
           fi
           printf '%s' "$CDP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controlpagos-test.jks"
           echo "CDP_KEYSTORE_PATH=$RUNNER_TEMP/controlpagos-test.jks" >> "$GITHUB_ENV"
+      - name: Probar interpretación financiera sin APIs
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Compilar APK firmado estable
         env:
           CDP_STORE_PASSWORD: ${{ secrets.CDP_STORE_PASSWORD }}
