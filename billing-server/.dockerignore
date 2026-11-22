@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+*.json.key
+*service-account*
+*.pem
+*.p12
+*.jks
+README.md
+tests
