@@ -17,6 +17,7 @@ import android.net.Uri;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebChromeClient;
 import android.graphics.Color;
 import android.widget.Toast;
@@ -45,7 +46,20 @@ public class MainActivity extends Activity {
     web.getSettings().setDomStorageEnabled(true);
     web.getSettings().setAllowFileAccess(false);
     web.getSettings().setAllowContentAccess(false);
-    web.setWebViewClient(new WebViewClient());
+    // La interfaz local no necesita navegar a sitios externos. No abrir contenido remoto
+    // dentro de un WebView que expone puentes nativos con datos financieros.
+    web.setWebViewClient(new WebViewClient(){
+      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
+        Uri target=request.getUrl();
+        return !"https".equalsIgnoreCase(target.getScheme())||
+               !"controlpagos.local".equalsIgnoreCase(target.getHost());
+      }
+      @Override public boolean shouldOverrideUrlLoading(WebView view,String url){
+        Uri target=Uri.parse(url);
+        return !"https".equalsIgnoreCase(target.getScheme())||
+               !"controlpagos.local".equalsIgnoreCase(target.getHost());
+      }
+    });
     web.setWebChromeClient(new WebChromeClient(){
       // Los diálogos estándar del WebView muestran «JavaScript»; usamos la identidad de PagoCheck IA.
       @Override public boolean onJsAlert(WebView view,String url,String message,JsResult result){
