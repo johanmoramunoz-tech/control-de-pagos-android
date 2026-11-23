@@ -75,6 +75,8 @@ jobs:
         run: node --test tests/pagos-mensuales.test.cjs
       - name: Probar apertura financiera única y rectificación
         run: node --test tests/apertura-unica.test.cjs
+      - name: Probar continuidad y traslado de pagos pendientes
+        run: node --test tests/continuidad-mensual.test.cjs
       - name: Probar análisis financiero local
         run: node --test tests/analisis-financiero.test.cjs
       - name: Probar interpretación financiera sin APIs
