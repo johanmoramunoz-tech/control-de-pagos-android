@@ -9,11 +9,11 @@ android {
   resValue 'string','license_pc_server_url', System.getenv('PC_LICENSE_SERVER_URL') ?: ''
  }
  namespace 'cr.controles.pagos'
- compileSdk 35
+ compileSdk 36
  defaultConfig {
   applicationId 'cr.controles.pagos'
   minSdk 24
-  targetSdk 35
+  targetSdk 36
   versionCode 24
   versionName '24.0-recuperacion-segura'
  }
