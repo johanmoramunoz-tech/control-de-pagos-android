@@ -73,6 +73,8 @@ jobs:
         run: node --test tests/reportes-periodos.test.cjs
       - name: Probar controles de pagos mensuales
         run: node --test tests/pagos-mensuales.test.cjs
+      - name: Probar apertura financiera única y rectificación
+        run: node --test tests/apertura-unica.test.cjs
       - name: Probar interpretación financiera sin APIs
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Compilar APK firmado estable
