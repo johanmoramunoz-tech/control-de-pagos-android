@@ -91,6 +91,7 @@ public class MainActivity extends Activity {
     web.addJavascriptInterface(new LocalPremiumBridge(),"AndroidLocal");
     web.addJavascriptInterface(new PlayBillingBridge(),"AndroidPlayBilling");
     web.addJavascriptInterface(new LicenseAccountBridge(),"AndroidLicenseAccount");
+    web.addJavascriptInterface(new SupportBridge(),"AndroidSupport");
     licenseAccount=new LicenseAccountManager(this,json->{
       sendAiCallback("receiveLicenseAccountStatus",json);
       new LocalPremiumBridge().status();
@@ -171,6 +172,20 @@ public class MainActivity extends Activity {
           intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Indica el importe y el concepto");
           startActivityForResult(intent,LOCAL_VOICE);
         }catch(Exception e){sendAiCallback("receiveLocalError","No hay reconocimiento de voz compatible instalado.");}
+      });
+    }
+  }
+  public class SupportBridge {
+    @JavascriptInterface public void shareReport(){
+      runOnUiThread(()->SupportDiagnostics.share(MainActivity.this));
+    }
+    @JavascriptInterface public void clearReport(){
+      runOnUiThread(()->{
+        new AlertDialog.Builder(MainActivity.this)
+          .setTitle("PagoCheck IA · Diagnósticos")
+          .setMessage("¿Eliminar el historial local de diagnósticos? No afecta tus datos financieros.")
+          .setPositiveButton("Eliminar",(d,w)->SupportDiagnostics.clear(MainActivity.this))
+          .setNegativeButton("Cancelar",null).show();
       });
     }
   }
@@ -324,6 +339,7 @@ public class MainActivity extends Activity {
     web.removeJavascriptInterface("AndroidLocal");
     web.removeJavascriptInterface("AndroidPlayBilling");
     web.removeJavascriptInterface("AndroidLicenseAccount");
+    web.removeJavascriptInterface("AndroidSupport");
     if(playBilling!=null)playBilling.close();
     web.destroy();super.onDestroy();
   }
