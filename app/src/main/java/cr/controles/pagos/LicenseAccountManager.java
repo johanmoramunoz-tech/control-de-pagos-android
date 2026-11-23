@@ -79,6 +79,23 @@ final class LicenseAccountManager {
       .setMessage(info)
       .setPositiveButton("Entendido",null).show());
   }
+  private void recordAuthFailure(String operation,Exception error){
+    String category=error==null?"UNKNOWN":error.getClass().getSimpleName();
+    String code="UNKNOWN";
+    if(error instanceof FirebaseAuthException)
+      code=((FirebaseAuthException)error).getErrorCode();
+    else if(error instanceof com.google.firebase.FirebaseNetworkException)
+      code="NETWORK";
+    else if(error instanceof com.google.firebase.FirebaseTooManyRequestsException)
+      code="RATE_LIMIT";
+    else if(error!=null&&error.getMessage()!=null){
+      java.util.regex.Matcher match=java.util.regex.Pattern
+        .compile("\\[([A-Z][A-Z0-9_\\-]{2,79})\\]")
+        .matcher(error.getMessage());
+      if(match.find())code=match.group(1);
+    }
+    SupportDiagnostics.record(activity,"AUTH",operation,category,code);
+  }
   private String authError(Exception error){
     if(error instanceof FirebaseAuthException){
       String code=((FirebaseAuthException)error).getErrorCode();
@@ -137,19 +154,19 @@ final class LicenseAccountManager {
           publish();
           if(register){
             auth.createUserWithEmailAndPassword(address,secret).addOnCompleteListener(activity,result->{
-              if(!result.isSuccessful()){licenseVerified=false;notifyAccount(authError(result.getException()));return;}
+              if(!result.isSuccessful()){licenseVerified=false;recordAuthFailure("REGISTER",result.getException());notifyAccount(authError(result.getException()));return;}
               FirebaseUser user=auth.getCurrentUser();
               licenseVerified=false;
               if(user==null){notifyAccount("Registro aceptado, pero no se pudo recuperar la sesión. Verifica Usuarios en Firebase.");return;}
               user.sendEmailVerification().addOnCompleteListener(activity,verification->{
                 if(verification.isSuccessful())notifyAccount("Cuenta creada. Correo de verificación enviado. Revisa también Spam. Esto no activa Premium.");
-                else notifyAccount("Cuenta creada, pero no pudo enviarse el correo de verificación. "+authError(verification.getException()));
+                else {recordAuthFailure("VERIFY_EMAIL",verification.getException());notifyAccount("Cuenta creada, pero no pudo enviarse el correo de verificación. "+authError(verification.getException()));}
               });
             });
           }else{
             auth.signInWithEmailAndPassword(address,secret).addOnCompleteListener(activity,result->{
               licenseVerified=false;
-              if(!result.isSuccessful()){notifyAccount(authError(result.getException()));return;}
+              if(!result.isSuccessful()){recordAuthFailure("LOGIN",result.getException());notifyAccount(authError(result.getException()));return;}
               notifyAccount("Sesión iniciada. Premium requiere una licencia validada.");
               refreshLicense();
             });
