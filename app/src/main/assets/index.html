@@ -354,18 +354,22 @@ function sourcePendingFor(targetMonth){
   .map(c=>({c,sourceMonth:prev,amount:outstandingFromMonth(c,prev)}));
 }
 function carryoverPanel(){
- const carry=carryList();
  const prior=sourcePendingFor(month);
- const pending=carry.filter(x=>carryRemaining(x)>0);
- let html='<div class="panel"><h2 style="margin-top:0">Pendientes de meses anteriores</h2>'+
- '<p class="muted">Se muestran separados de los compromisos de '+safe(month)+'. No son una factura adicional ni se contabilizan como gasto hasta que registres el pago efectivo.</p>';
- if(pending.length){
-  html+='<div class="entries">'+pending.map(x=>'<article class="item"><div class="body"><div class="name">'+safe(x.name)+' <span class="status warn">Arrastrado de '+safe(x.sourceMonth)+'</span></div>'+
-   '<div class="sub">Obligación de '+safe(x.sourceMonth)+' · Pendiente '+crc(carryRemaining(x))+' de '+crc(x.amount)+'</div>'+
-   '<div class="actions"><button class="mini" data-carrypay="'+safe(x.id)+'">Registrar pago o abono</button></div></div></article>').join('')+'</div>';
- }else html+='<p class="muted">No hay pagos arrastrados pendientes.</p>';
- if(prior.length)html+='<div class="bottom"><button type="button" class="button outline" id="reviewCarryovers">Revisar '+prior.length+' pendiente(s) de '+safe(previousMonthOf(month))+'</button></div>';
- return html+'</div>';
+ if(!prior.length)return '';
+ return '<div class="banner"><strong>Revisión de cambio de mes:</strong> '+prior.length+
+ ' pago(s) del mes anterior aún no confirmados. Selecciona los que realmente debas arrastrar. No se registrarán como egreso por esta acción.'+
+ '<div class="bottom"><button type="button" class="button outline" id="reviewCarryovers">Revisar pendientes de '+safe(previousMonthOf(month))+'</button></div></div>';
+}
+function carriedCards(){
+ const pending=carryList();
+ if(!pending.length)return '';
+ return '<div class="monthly-items">'+pending.map(x=>
+ '<article class="monthly-item" style="border-color:#edc88b;background:#fff9ed">'+
+ '<div class="monthly-title"><strong>'+safe(x.name)+'</strong></div>'+
+ '<div class="sub"><strong>Arrastrado de '+safe(x.sourceMonth)+'</strong> · No es el recibo de '+safe(month)+'</div>'+
+ '<div class="monthly-amount">'+crc(carryRemaining(x))+'</div>'+
+ '<div class="sub">Saldo pendiente de obligación anterior · Total original '+crc(x.amount)+'</div>'+
+ '<div class="monthly-actions"><button type="button" class="mini" data-carrypay="'+safe(x.id)+'">Pagar o abonar deuda anterior</button></div></article>').join('')+'</div>';
 }
 function reviewCarryovers(){
  if(locked())return;
@@ -425,7 +429,7 @@ function monthlyBoard(arr){
  const expenses=arr.filter(c=>c.kind==='expense'&&!c.budgetManaged),pending=expenses.filter(c=>!checked(c)),done=expenses.filter(checked);
  pending.sort((a,b)=>(Number(a.planned||a.due)||32)-(Number(b.planned||b.due)||32));
  done.sort((a,b)=>a.name.localeCompare(b.name,'es'));
- return '<div class="payment-columns"><section class="payment-group"><div class="payment-group-title"><strong>Pendientes</strong><span>'+pending.length+'</span></div>'+monthlyCards(pending,'pending')+'</section>'+
+ return '<div class="payment-columns"><section class="payment-group"><div class="payment-group-title"><strong>Pendientes</strong><span>'+(pending.length+carryList().length)+'</span></div>'+carriedCards()+monthlyCards(pending,'pending')+'</section>'+
  '<section class="payment-group"><div class="payment-group-title paid-title"><strong>Realizados</strong><span>'+done.length+'</span></div>'+monthlyCards(done,'done')+'</section></div>';
 }
 
