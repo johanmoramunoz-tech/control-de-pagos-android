@@ -265,6 +265,50 @@ final class LicenseAccountManager {
       notifyAccount(message);
     });
   }
+  void deleteAccount(){
+    if(auth==null){notifyAccount("Firebase no está configurado.");return;}
+    FirebaseUser user=auth.getCurrentUser();
+    if(user==null){notifyAccount("Inicia sesión para solicitar la eliminación de tu cuenta.");return;}
+    activity.runOnUiThread(()->new AlertDialog.Builder(activity)
+      .setTitle("Eliminar cuenta de PagoCheck IA")
+      .setMessage("Se eliminará definitivamente tu cuenta de Firebase Authentication. No se borrarán los movimientos ni presupuestos guardados en este teléfono. Las compras y registros de un futuro servidor de licencias requieren un procedimiento de eliminación adicional. ¿Deseas continuar?")
+      .setNegativeButton("Cancelar",null)
+      .setPositiveButton("Continuar",(dialog,which)->confirmDeleteAccount(user)).show());
+  }
+  private void confirmDeleteAccount(FirebaseUser user){
+    activity.runOnUiThread(()->{
+      EditText confirmation=new EditText(activity);
+      confirmation.setHint("Escribe ELIMINAR");
+      confirmation.setSingleLine(true);
+      int pad=(int)(20*activity.getResources().getDisplayMetrics().density);
+      LinearLayout layout=new LinearLayout(activity);
+      layout.setPadding(pad,pad,pad,pad);layout.addView(confirmation);
+      new AlertDialog.Builder(activity).setTitle("Confirmar eliminación definitiva")
+        .setMessage("Para evitar una eliminación accidental, escribe ELIMINAR. Firebase puede exigir iniciar sesión de nuevo por seguridad.")
+        .setView(layout)
+        .setNegativeButton("Cancelar",null)
+        .setPositiveButton("Eliminar cuenta",(dialog,which)->{
+          if(!"ELIMINAR".equals(confirmation.getText().toString().trim())){
+            notifyAccount("No se eliminó la cuenta. Debes escribir ELIMINAR exactamente.");return;
+          }
+          FirebaseUser current=auth==null?null:auth.getCurrentUser();
+          if(current==null||!current.getUid().equals(user.getUid())){
+            notifyAccount("La sesión cambió. Inicia sesión e inténtalo nuevamente.");return;
+          }
+          user.delete().addOnCompleteListener(activity,result->{
+            if(result.isSuccessful()){
+              authRevision++;licenseVerified=false;checking=false;
+              notifyAccount("Cuenta Firebase eliminada. Tus datos financieros locales no se borraron. Si tenías una compra vinculada, solicita asistencia para recuperar sus derechos.");
+            }else if(result.getException() instanceof com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException){
+              notifyAccount("Por seguridad, Firebase exige una autenticación reciente. Cierra sesión, inicia sesión de nuevo y repite la solicitud de eliminación.");
+            }else{
+              recordAuthFailure("DELETE_ACCOUNT",result.getException());
+              notifyAccount("No se pudo eliminar la cuenta. "+authError(result.getException()));
+            }
+          });
+        }).show();
+    });
+  }
   void signOut(){
     authRevision++;
     if(auth!=null)auth.signOut();
