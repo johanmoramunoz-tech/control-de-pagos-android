@@ -135,9 +135,6 @@ final class LicenseAccountManager {
         }).setNegativeButton("Cancelar",null).show();
     });
   }
-setNegativeButton("Cancelar",null).show();
-    });
-  }
   void signOut(){
     authRevision++;
     if(auth!=null)auth.signOut();
