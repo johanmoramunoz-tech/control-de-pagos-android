@@ -97,8 +97,22 @@ final class LicenseAccountManager {
       return "Firebase no pudo comunicarse con el servidor (FirebaseNetworkException). Comprueba Internet, DNS privado y restricciones de red.";
     if(error instanceof com.google.firebase.FirebaseTooManyRequestsException)
       return "Firebase limitó los intentos temporalmente (FirebaseTooManyRequestsException).";
-    if(error!=null)
-      return "La solicitud falló con el tipo de error: "+error.getClass().getSimpleName()+". Comunica este nombre para revisar la causa.";
+    if(error!=null){
+      String detail=error.getMessage();
+      // Mostrar solamente codigos tecnicos de Firebase; no mostrar datos personales, tokens ni claves.
+      if(detail!=null){
+        java.util.regex.Matcher code=java.util.regex.Pattern
+          .compile("\\[([A-Z][A-Z0-9_\\-]{2,79})\\]")
+          .matcher(detail);
+        if(code.find())return "Firebase rechazó el registro. Código: "+code.group(1)+".";
+        for(String known:new String[]{"CONFIGURATION_NOT_FOUND","API_KEY_INVALID","API_KEY_SERVICE_BLOCKED",
+            "PROJECT_NOT_FOUND","OPERATION_NOT_ALLOWED","INVALID_API_KEY","INVALID_APP_CREDENTIAL"}){
+          if(detail.contains(known))return "Firebase rechazó el registro. Código: "+known+".";
+        }
+      }
+      return "Firebase devolvió "+error.getClass().getSimpleName()+
+        " sin código identificable. Es necesario revisar el registro de diagnóstico de Android.";
+    }
     return "Firebase no devolvió información del error. Revisa configuración y conexión.";
   }
   void showLogin(boolean register){
