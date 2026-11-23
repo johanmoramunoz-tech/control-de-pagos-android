@@ -1,27 +1,45 @@
 # PagoCheck IA — Ficha preliminar para Google Play
-**Estado:** borrador para publicación futura. No declarar funciones de IA como operativas antes de pruebas y conexión real.
+**Estado:** borrador interno; no publicar hasta que se contraste con el AAB real.
 
-## Nombre (≤30 caracteres)
+## Nombre (máximo 30 caracteres)
 PagoCheck IA
 
-## Descripción breve (≤80 caracteres)
+## Descripción breve (máximo 80 caracteres)
 Organiza tus pagos, ingresos, gastos y recordatorios mensuales.
 
 ## Descripción detallada preliminar
-PagoCheck IA te permite organizar tus compromisos financieros de cada mes desde tu teléfono Android.
+PagoCheck IA permite organizar compromisos financieros y presupuestos personales desde Android.
 
-Registra ingresos proyectados, gastos recurrentes, fechas de corte y vencimientos, pagos realizados y abonos parciales. Compara tu presupuesto con los movimientos ejecutados, asigna categorías e íconos a tus registros y consulta un resumen numérico o gráfico de los gastos.
+Registra ingresos estimados, gastos recurrentes, vencimientos, pagos efectuados y abonos parciales. Clasifica tus movimientos, consulta informes por período y revisa resúmenes de tus registros.
 
-Añade un saldo inicial para estimar tu balance y programa recordatorios de obligaciones pendientes. Si completas un pago, los recordatorios siguientes de ese compromiso se cancelan.
+Puedes programar recordatorios de obligaciones y exportar o importar respaldos manuales. La información financiera se administra principalmente en el dispositivo; no se conecta a cuentas bancarias ni ejecuta transferencias.
 
-La versión inicial funciona con datos locales y permite exportar respaldos JSON manuales. No ofrece conexión bancaria ni conciliación automática y el saldo mostrado es una estimación basada en tus registros.
+La aplicación incluye registro e inicio de sesión mediante Firebase para la futura recuperación de licencias. El registro de una cuenta no desbloquea Premium ni implica una compra.
 
-**Próximas funciones, no incluidas aún:** compartir un presupuesto entre integrantes familiares, respaldo automático en Google Drive, escaneo de recibos mediante inteligencia artificial e integración con asistentes externos.
+**No declarar en Play Store como funciones disponibles mientras no estén implementadas y comprobadas:** análisis de comprobantes por IA en la nube, sincronización automática, servidor de licencias, suscripciones, compras comerciales y recuperación de compras.
 
-## Modelo comercial previsto (todavía no activado)
-- Gratis: presupuesto, movimientos y recordatorios sin IA.
-- Plus: integración con la IA propia del usuario, pago único propuesto.
-- Premium IA: servicios inteligentes suministrados por el desarrollador, suscripción propuesta.
+## Estado comercial comprobado en código
+- Modelo de distribución actual: versión de prueba con herramientas gratuitas y simulación de funciones Premium, sin pagos reales.
+- Google Play Billing tiene `LIVE_PURCHASES_ENABLED=false`.
+- Producto previsto: `pagocheck_premium_unico` (compra única, no consumible); aún sin producto configurado en Play Console ni servidor operativo.
+- La simulación Premium de debug debe eliminarse o permanecer inaccesible en Release.
+- No anunciar suscripción ni niveles Plus/Premium IA hasta que su modelo, disponibilidad y facturación estén establecidos y probados.
 
-## Notas de cumplimiento
-La presencia de "IA" en la marca no significa que la versión actual ya analice documentos. Las capturas y descripciones deben mostrar las funciones reales de la compilación disponible. Comprobar antes de publicar: privacidad, seguridad de datos, pagos, permisos, firma, disponibilidad de marca y requisitos vigentes de Google Play.
+## Lista de preparación antes de crear ficha pública
+- [ ] Cuenta Play Console con identidad/teléfonos verificados.
+- [ ] Registro de la app `cr.controles.pagos`, ficha, categoría, correo de soporte y audiencia.
+- [ ] Política de privacidad pública exacta y declaración Seguridad de los datos contrastada con el AAB.
+- [ ] Eliminación de cuenta desde la app y recurso web público para solicitudes.
+- [ ] Actualizar `targetSdk` de 35 a 36 o superior, actualizando Gradle/SDK si corresponde, y ejecutar pruebas de regresión.
+- [ ] Generar AAB **Release** firmado con la configuración de carga de Play; la construcción de `bundleRelease` en CI actual no es todavía un paquete de distribución firmado.
+- [ ] Preparar icono, banner, capturas reales de la variante de distribución y descripción sin funciones ficticias.
+- [ ] Comprobar avisos y requisitos de aplicaciones que gestionan datos financieros y políticas aplicables.
+- [ ] Preparar al menos 12 testers continuos durante 14 días en prueba cerrada si aplica a la cuenta personal nueva; documentar pruebas y correcciones.
+- [ ] Antes de habilitar compras: producto Play, servidor HTTPS seguro, permisos mínimos, verificación de compra, reconocimiento y cancelaciones/reembolsos probados.
+- [ ] Revisar advertencias de versiones obsoletas de acciones en GitHub antes de publicar.
+
+Referencias oficiales:
+- https://support.google.com/googleplay/android-developer/answer/11926878
+- https://support.google.com/googleplay/android-developer/answer/14151465
+- https://support.google.com/googleplay/android-developer/answer/9859152
+- https://support.google.com/googleplay/android-developer/answer/10144311
