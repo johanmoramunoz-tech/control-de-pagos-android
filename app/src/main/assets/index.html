@@ -113,8 +113,8 @@ function editOpening(){
    if(correction&&reasonText.length<5){alert('Indica el motivo de la rectificación (mínimo 5 caracteres).');return false;}
    const earlier=historical.filter(t=>t.date&&t.date<date).length;
    let warning='La apertura se fija en '+date+' con '+crc(n)+'. El monto NO se añadirá como ingreso. ¿Confirmar?';
-   if(earlier)warning+='\\nHay '+earlier+' movimiento(s) anteriores a esa fecha; quedarán fuera del saldo acumulado, aunque seguirán apareciendo en sus informes mensuales.';
-   if(correction)warning+='\\nEsta rectificación sustituye la apertura existente y modificará los saldos acumulados; se conservará el historial de cambios.';
+   if(earlier)warning+='\nHay '+earlier+' movimiento(s) anteriores a esa fecha; quedarán fuera del saldo acumulado, aunque seguirán apareciendo en sus informes mensuales.';
+   if(correction)warning+='\nEsta rectificación sustituye la apertura existente y modificará los saldos acumulados; se conservará el historial de cambios.';
    if(!confirm(warning))return false;
    const before=previous?{date:previous.date||previous.month+'-01',amount:previous.amount}:null;
    const timestamp=new Date().toISOString();
@@ -729,7 +729,7 @@ function validateBackup(v){
  (v.categories!==undefined&&!Array.isArray(v.categories))||(v.budgets!==undefined&&!Array.isArray(v.budgets))||
  (v.paymentChecks!==undefined&&(!v.paymentChecks||typeof v.paymentChecks!=='object'||Array.isArray(v.paymentChecks))))throw Error('Estructura del respaldo incompatible.');
  if(v.openingHistory!==undefined&&(!Array.isArray(v.openingHistory)||v.openingHistory.length>5000))throw Error('Historial de apertura incompatible.');
- if(v.opening!==undefined&&v.opening!==null&&(!v.opening||typeof v.opening!=='object'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(v.opening.date||'')||!Number.isSafeInteger(v.opening.amount)||v.opening.amount<0))throw Error('Saldo de apertura incompatible.');
+ if(v.opening!==undefined&&v.opening!==null&&(!v.opening||typeof v.opening!=='object'||!parseDateInput(v.opening.date||((v.opening.month||'')+'-01'))||!Number.isSafeInteger(v.opening.amount)||v.opening.amount<0))throw Error('Saldo de apertura incompatible.');
  const arrays=[v.commitments,v.transactions,v.audit,v.categories||[],v.budgets||[]];
  if(arrays.some(a=>a.length>100000))throw Error('El respaldo excede el número seguro de registros.');
  if(JSON.stringify(v).length>5000000)throw Error('El archivo supera el tamaño admitido.');
