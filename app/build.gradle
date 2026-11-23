@@ -1,6 +1,10 @@
 plugins { id 'com.android.application' }
 def stableKeyPath = System.getenv('CDP_KEYSTORE_PATH')
 def stablePass = System.getenv('CDP_STORE_PASSWORD')
+def uploadKeyPath = System.getenv('PC_UPLOAD_KEYSTORE_PATH')
+def uploadStorePass = System.getenv('PC_UPLOAD_STORE_PASSWORD')
+def uploadKeyAlias = System.getenv('PC_UPLOAD_KEY_ALIAS')
+def uploadKeyPass = System.getenv('PC_UPLOAD_KEY_PASSWORD')
 android {
  defaultConfig {
   resValue 'string','firebase_pc_app_id', System.getenv('PC_FIREBASE_APP_ID') ?: ''
@@ -14,10 +18,18 @@ android {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 36
-  versionCode 24
-  versionName '24.0-recuperacion-segura'
+  versionCode 25
+  versionName '25.0-prueba-interna'
  }
  signingConfigs {
+  if(uploadKeyPath && uploadStorePass && uploadKeyAlias && uploadKeyPass) {
+   playUpload {
+    storeFile file(uploadKeyPath)
+    storePassword uploadStorePass
+    keyAlias uploadKeyAlias
+    keyPassword uploadKeyPass
+   }
+  }
   if(stableKeyPath && stablePass) {
    stableTest {
     storeFile file(stableKeyPath)
@@ -31,6 +43,10 @@ android {
  buildTypes {
   debug {
    if(stableKeyPath && stablePass) signingConfig signingConfigs.stableTest
+  }
+  release {
+   debuggable false
+   if(uploadKeyPath && uploadStorePass && uploadKeyAlias && uploadKeyPass) signingConfig signingConfigs.playUpload
   }
  }
  compileOptions {
