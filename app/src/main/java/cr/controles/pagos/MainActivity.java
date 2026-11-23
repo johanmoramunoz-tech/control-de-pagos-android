@@ -211,6 +211,9 @@ public class MainActivity extends Activity {
     @JavascriptInterface public void signOut(){
       runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.signOut();});
     }
+    @JavascriptInterface public void deleteAccount(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.deleteAccount();});
+    }
     @JavascriptInterface public void refreshLicense(){
       runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.refreshLicense();});
     }
