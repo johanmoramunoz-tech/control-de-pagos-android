@@ -42,6 +42,7 @@ function migrate(){
  for(const b of db.budgets){if(!Array.isArray(b.subcategories))b.subcategories=[];if(!b.overrides)b.overrides={};}
  if(!db.opening||typeof db.opening!=='object')db.opening=null;
  if(!Array.isArray(db.openingHistory))db.openingHistory=[];
+ if(!Array.isArray(db.carryovers))db.carryovers=[];
  db.schema=20;
 }
 function categoryList(kind){return db.categories.filter(c=>c.kind===kind)}
@@ -136,7 +137,7 @@ function persist(){try{localStorage.setItem(KEY,JSON.stringify(db));syncAndroidR
 function logging(action,extra={}){db.audit.push({id:uuid(),timestamp:new Date().toISOString(),action,...extra});if(db.audit.length>10000)db.audit=db.audit.slice(-10000)}
 function currentCommitments(){return db.commitments.filter(c=>c.start<=month&&(!c.end||c.end>=month))}
 function ledger(){return db.transactions.filter(t=>t.month===month&&!t.reversed)}
-function related(c){return ledger().filter(t=>t.commitmentId===c.id&&t.kind===c.kind)}
+function related(c){return ledger().filter(t=>!t.carryoverId&&t.commitmentId===c.id&&t.kind===c.kind)}
 function target(c){return Object.hasOwn(c.overrides||{},month)?c.overrides[month]:c.estimate}
 function executed(c){return related(c).reduce((a,t)=>a+t.amount,0)}
 
@@ -336,6 +337,79 @@ function status(c){const paid=executed(c);return checked(c)?'Pagado':paid>0?'Seg
 function setPaidCheck(c,origin){
  (db.paymentChecks[month]??={})[c.id]={complete:true,confirmedAt:new Date().toISOString(),origin};
 }
+// Cada traslado representa una obligación antigua, no un gasto nuevo ni una segunda instancia del compromiso.
+function targetForMonth(c,m){return Object.hasOwn(c.overrides||{},m)?Number(c.overrides[m]):Number(c.estimate||0)}
+function paidForMonth(c,m){return db.transactions.filter(t=>!t.reversed&&!t.carryoverId&&t.month===m&&t.commitmentId===c.id&&t.kind==='expense').reduce((n,t)=>n+Number(t.amount||0),0)}
+function outstandingFromMonth(c,m){
+ if(db.paymentChecks?.[m]?.[c.id]?.complete)return 0;
+ return Math.max(0,targetForMonth(c,m)-paidForMonth(c,m));
+}
+function carryPayments(item){return db.transactions.filter(t=>!t.reversed&&t.carryoverId===item.id&&t.kind==='expense').reduce((n,t)=>n+Number(t.amount||0),0)}
+function carryRemaining(item){return Math.max(0,item.amount-carryPayments(item))}
+function carryList(m=month){return (db.carryovers||[]).filter(x=>x.targetMonth<=m&&carryRemaining(x)>0)}
+function sourcePendingFor(targetMonth){
+ const prev=previousMonthOf(targetMonth);
+ return db.commitments.filter(c=>c.kind==='expense'&&!c.budgetManaged&&c.start<=prev&&(!c.end||c.end>=prev))
+  .filter(c=>outstandingFromMonth(c,prev)>0&&!db.carryovers.some(x=>x.sourceMonth===prev&&x.commitmentId===c.id))
+  .map(c=>({c,sourceMonth:prev,amount:outstandingFromMonth(c,prev)}));
+}
+function carryoverPanel(){
+ const carry=carryList();
+ const prior=sourcePendingFor(month);
+ const pending=carry.filter(x=>carryRemaining(x)>0);
+ let html='<div class="panel"><h2 style="margin-top:0">Pendientes de meses anteriores</h2>'+
+ '<p class="muted">Se muestran separados de los compromisos de '+safe(month)+'. No son una factura adicional ni se contabilizan como gasto hasta que registres el pago efectivo.</p>';
+ if(pending.length){
+  html+='<div class="entries">'+pending.map(x=>'<article class="item"><div class="body"><div class="name">'+safe(x.name)+' <span class="status warn">Arrastrado de '+safe(x.sourceMonth)+'</span></div>'+
+   '<div class="sub">Obligación de '+safe(x.sourceMonth)+' · Pendiente '+crc(carryRemaining(x))+' de '+crc(x.amount)+'</div>'+
+   '<div class="actions"><button class="mini" data-carrypay="'+safe(x.id)+'">Registrar pago o abono</button></div></div></article>').join('')+'</div>';
+ }else html+='<p class="muted">No hay pagos arrastrados pendientes.</p>';
+ if(prior.length)html+='<div class="bottom"><button type="button" class="button outline" id="reviewCarryovers">Revisar '+prior.length+' pendiente(s) de '+safe(previousMonthOf(month))+'</button></div>';
+ return html+'</div>';
+}
+function reviewCarryovers(){
+ if(locked())return;
+ const pending=sourcePendingFor(month);
+ if(!pending.length){alert('No hay nuevos pagos pendientes del mes anterior para trasladar.');return;}
+ const form='<p class="muted">Selecciona únicamente las obligaciones realmente pendientes. Se identificarán por el mes de origen y no se sumarán como gastos ejecutados al trasladarlas.</p>'+
+ pending.map((x,i)=>'<div class="formrow"><label><input type="checkbox" data-carry-index="'+i+'" checked> '+safe(x.c.name)+' · '+safe(x.sourceMonth)+' · '+crc(x.amount)+'</label></div>').join('');
+ popup('Revisar pagos pendientes de '+previousMonthOf(month),form,()=>{
+  const selected=[...document.querySelectorAll('[data-carry-index]:checked')].map(x=>pending[Number(x.dataset.carryIndex)]).filter(Boolean);
+  if(!selected.length){alert('Selecciona al menos una obligación o cancela.');return false;}
+  if(!confirm('¿Trasladar '+selected.length+' obligación(es) a '+month+'? El seguimiento del mes de origen no se borrará y no se registrará ningún gasto nuevo hasta que se pague.'))return false;
+  for(const x of selected){
+   if(db.carryovers.some(y=>y.sourceMonth===x.sourceMonth&&y.commitmentId===x.c.id))continue;
+   db.carryovers.push({id:uuid(),sourceMonth:x.sourceMonth,targetMonth:month,commitmentId:x.c.id,
+    name:x.c.name,category:x.c.category,amount:x.amount,createdAt:new Date().toISOString()});
+  }
+  logging('Pendientes trasladados al mes siguiente',{month,count:selected.length});
+  return persist();
+ });
+}
+function payCarryover(id){
+ if(locked())return;
+ const item=db.carryovers.find(x=>x.id===id);
+ if(!item||carryRemaining(item)<=0)return;
+ const remaining=carryRemaining(item);
+ popup('Pagar obligación arrastrada',
+  '<p class="muted"><strong>'+safe(item.name)+'</strong> · PENDIENTE DE '+safe(item.sourceMonth)+
+  '. Este pago se registrará como egreso real en '+safe(month)+', sin marcar pagado el compromiso recurrente de '+safe(month)+'.</p>'+
+  field('amount','Monto del pago o abono (₡)','number',remaining,'required min="1" max="1000000000" step="1"')+
+  field('date','Fecha efectiva del pago','date',month===monthNow()?today():month+'-01','required'),
+  ()=>{
+   const amount=moneyField('f_amount'),date=dateField('f_date');
+   if(!Number.isSafeInteger(amount)||amount<=0||amount>remaining||!date||date.slice(0,7)!==month){
+    alert('Comprueba el monto (máximo '+crc(remaining)+') y la fecha del mes seleccionado.');return false;
+   }
+   if(!confirm('¿Registrar '+crc(amount)+' para '+item.name+' pendiente de '+item.sourceMonth+'? No afectará al compromiso recurrente de '+month+'.'))return false;
+   db.transactions.push({id:uuid(),recordedAt:new Date().toISOString(),month,date,
+    kind:'expense',amount,description:item.name+' · pendiente de '+item.sourceMonth,
+    category:item.category,commitmentId:item.commitmentId,carryoverId:item.id,
+    source:'carryover-payment',author:'Usuario local',reversed:false});
+   logging('Pago de obligación arrastrada',{carryoverId:item.id,sourceMonth:item.sourceMonth,month,amount});
+   return persist();
+  });
+}
 function monthlyCards(arr,kind){
  if(!arr.length)return '<div class="empty">Sin compromisos en esta columna.</div>';
  return '<div class="monthly-items">'+arr.map(c=>{
@@ -422,7 +496,7 @@ function bindPremiumRibbon(){
 function render(){const s=summary();$('currentMonth').textContent=new Date(Number(month.slice(0,4)),Number(month.slice(5,7))-1,1).toLocaleDateString('es-CR',{month:'long',year:'numeric'});const available=balanceAt(month);$('headerBalanceValue').textContent=available===null?'Saldo inicial pendiente':crc(available);$('headerBalance').classList.toggle('negative',available!==null&&available<0);document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));let html='';if(tab==='home'){
  const chooser='<div class="viewchooser"><strong>Resumen financiero</strong><div><button type="button" class="modebtn '+(viewMode==='numeric'?'active':'')+'" data-viewmode="numeric">Números</button> <button type="button" class="modebtn '+(viewMode==='graphic'?'active':'')+'" data-viewmode="graphic">Gráficos</button></div></div>';
  const numbers=`<div class="grid">${tile('Ingresos proyectados',s.plannedInc)}${tile('Gastos proyectados',s.plannedExp)}${tile('Ingresos recibidos',s.realInc)}${tile('Gastos ejecutados',s.realExp)}${tile('Balance mensual',s.realInc-s.realExp)}${db.opening?tile('Saldo disponible estimado',balanceAt(month)):tile('Saldo inicial pendiente',0)}${tile('Monto pendiente',s.pending)}<div class="tile"><small>Pagos sin confirmar</small><strong>${s.pendingCount}</strong></div></div><p class="muted">El saldo disponible es estimado y no está conciliado con las cuentas bancarias.</p>`;
- html=budgetHealthNotice(s)+`${section('Pagos del mes','+ Añadir compromiso','expense')}${monthlyBoard(s.c)}`+chooser+(viewMode==='numeric'?numbers:graphicsFor(s))+`${section('Movimientos recientes')}${listTransactions(s.tx.slice(-5))}`;
+ html=budgetHealthNotice(s)+`${section('Pagos del mes','+ Añadir compromiso','expense')}${carryoverPanel()}${monthlyBoard(s.c)}`+chooser+(viewMode==='numeric'?numbers:graphicsFor(s))+`${section('Movimientos recientes')}${listTransactions(s.tx.slice(-5))}`;
 }
 if(tab==='obligations'){html=`${section('Ingresos proyectados','+ Ingreso','income')}${listCommitments(s.c.filter(c=>c.kind==='income'))}${section('Gastos obligatorios','+ Gasto','expense')}${listCommitments(s.c.filter(c=>c.kind==='expense'))}`}
 if(tab==='budgets'){html=budgetHealthNotice(s)+section('Presupuestos de consumo')+'<p class="muted">Controla compras recurrentes por categoría y subcategoría. Cada movimiento real reduce el disponible sin crear un segundo gasto en el resumen general.</p><div class="bottom"><button class="button" id="addBudget">+ Nuevo presupuesto</button></div>'+budgetList()}
@@ -448,7 +522,7 @@ if(tab==='ai'){html=`<h2>Planes de PagoCheck IA</h2><div class="stack">
  <article class="panel"><strong>Google Play · compra única Premium</strong><p class="muted">Integración de consulta de Google Play en preparación. Aunque Google Play informe que existe una compra, no desbloquearemos Premium hasta contar con verificación segura de licencia. No se realizarán cargos en esta compilación.</p><p class="muted" id="billingPlayStatus">Consultando disponibilidad de Google Play...</p><div class="bottom"><button type="button" id="refreshBilling">Consultar o recuperar compra</button><button type="button" id="buyPremium" disabled>Comprar Premium · No disponible</button></div><p class="muted" id="billingPriceNote">El precio aparecerá cuando configuremos el producto en Play Console. La compra se habilitará tras completar el servidor de licencias.</p></article>
  </div>`}
 if(tab==='settings'){html=`<h2>Saldo inicial</h2><div class="panel"><p class="muted">${db.opening?'Apertura única confirmada: '+safe(db.opening.date||db.opening.month)+' · Base '+crc(db.opening.amount):'Define cuánto dinero había al comenzar el seguimiento.'}</p><button class="button" id="openBalance">${db.opening?'Solicitar rectificación de apertura':'Configurar saldo inicial'}</button>${(db.openingHistory||[]).length?'<p class="muted">Cambios de apertura registrados: '+db.openingHistory.length+'. Consulta la bitácora o el respaldo JSON para el detalle.</p>':''}</div><h2>Datos y respaldos</h2><div class="panel"><p class="muted">Versión 24.0 · verificación segura de compras. Los datos residen en el almacenamiento de esta instalación del navegador o WebView.</p><div class="bottom"><button id="export">Exportar JSON</button><button id="import">Importar JSON</button><button id="wipe">Borrar datos locales</button></div><p class="muted">Los respaldos JSON no están cifrados; no los compartas públicamente. No hay sincronización de cuentas ni usuarios todavía. Los respaldos JSON no son invitaciones de acceso; el OCR Premium se procesa localmente.</p></div><h2>Cuentas y acceso compartido</h2><div class="panel"><strong>Registro por correo — aún no disponible</strong><p class="muted">Los datos actuales están guardados en este teléfono, no en una cuenta personal. Por seguridad, todavía no es posible registrarse mediante correo electrónico ni autorizar a otros usuarios para consultar o introducir movimientos. Estas funciones necesitan autenticación, sincronización protegida y permisos de lectura o edición verificables; no basta con guardar direcciones de correo localmente.</p></div><h2>Bitácora</h2><div class="panel">${db.audit.slice(-15).reverse().map(a=>`<div class="sub">${safe(a.timestamp)} · ${safe(a.action)}</div>`).join('')||'<p class="muted">Sin eventos todavía.</p>'}</div>`}
-$('view').innerHTML=(tab==='ai'?'':premiumRibbon(tab))+html;bindPremiumRibbon();if(tab==='ai'||tab==='movements')bindLocalPremium();if(tab==='ai'){const advisor=$('analyzeFinancialMonth');if(advisor)advisor.onclick=()=>{if(!localStatus.available){showPremiumInfo();return;}const out=$('financialAdvisorResults');if(out)out.innerHTML=monthlyAdvisorHtml(month);};}if(tab==='closing')bindReportExport();document.querySelectorAll('[data-viewmode]').forEach(b=>b.onclick=()=>{viewMode=b.dataset.viewmode;localStorage.setItem('cp-v8-home-mode',viewMode);render()});document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>b.dataset.add==='voice'?openVoice():b.dataset.add==='photo'?openFree('photo'):b.dataset.add==='free'?openFree('manual'):openCommitment(b.dataset.add));document.querySelectorAll('[data-catadd]').forEach(b=>b.onclick=()=>editCategory(b.dataset.catadd,null));document.querySelectorAll('[data-catedit]').forEach(b=>b.onclick=()=>{const c=db.categories.find(c=>c.id===b.dataset.catedit);if(c)editCategory(c.kind,c.id)});document.querySelectorAll('[data-catdelete]').forEach(b=>b.onclick=()=>deleteCategory(b.dataset.catdelete));if($('openBalance'))$('openBalance').onclick=editOpening;document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openCommitment(null,b.dataset.edit));document.querySelectorAll('[data-abono]').forEach(b=>b.onclick=()=>openPayment(b.dataset.abono));document.querySelectorAll('[data-checkpay]').forEach(b=>b.onclick=()=>finishPayment(b.dataset.checkpay));document.querySelectorAll('[data-adjustpay]').forEach(b=>b.onclick=()=>openPaymentAdjustment(b.dataset.adjustpay));document.querySelectorAll('[data-reverse]').forEach(b=>b.onclick=()=>reverse(b.dataset.reverse));if($('addBudget'))$('addBudget').onclick=()=>openBudget(null);document.querySelectorAll('[data-budgetedit]').forEach(b=>b.onclick=()=>openBudget(b.dataset.budgetedit));document.querySelectorAll('[data-budgetspend]').forEach(b=>b.onclick=()=>recordBudgetExpense(b.dataset.budgetspend));document.querySelectorAll('[data-budgetdetail]').forEach(b=>b.onclick=()=>detailBudget(b.dataset.budgetdetail));if($('closeMonth'))$('closeMonth').onclick=()=>{if(db.monthClosed[month]){if(!confirm('¿Reabrir el mes para registrar cambios?'))return;delete db.monthClosed[month];logging('Mes reabierto',{month})}else{if(!confirm('¿Cerrar este mes? No podrás registrar movimientos hasta reabrirlo.'))return;db.monthClosed[month]={closedAt:new Date().toISOString(),snapshot:summary()};logging('Mes cerrado',{month})}persist();render()};if($('export'))$('export').onclick=exportData;if($('import'))$('import').onclick=()=>window.AndroidBackup?.importData?window.AndroidBackup.importData():$('backupFile').click();if($('wipe'))$('wipe').onclick=()=>{if(confirm('¿Borrar definitivamente todos los datos locales de prueba? Exporta primero un respaldo.')){db={schema:20,commitments:[],transactions:[],monthClosed:{},audit:[],paymentChecks:{},categories:DEFAULT_CATEGORIES.map(c=>({...c,id:uuid()})),opening:null};persist();render()}}}
+$('view').innerHTML=(tab==='ai'?'':premiumRibbon(tab))+html;bindPremiumRibbon();if(tab==='ai'||tab==='movements')bindLocalPremium();if(tab==='ai'){const advisor=$('analyzeFinancialMonth');if(advisor)advisor.onclick=()=>{if(!localStatus.available){showPremiumInfo();return;}const out=$('financialAdvisorResults');if(out)out.innerHTML=monthlyAdvisorHtml(month);};}if(tab==='closing')bindReportExport();document.querySelectorAll('[data-viewmode]').forEach(b=>b.onclick=()=>{viewMode=b.dataset.viewmode;localStorage.setItem('cp-v8-home-mode',viewMode);render()});document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>b.dataset.add==='voice'?openVoice():b.dataset.add==='photo'?openFree('photo'):b.dataset.add==='free'?openFree('manual'):openCommitment(b.dataset.add));document.querySelectorAll('[data-catadd]').forEach(b=>b.onclick=()=>editCategory(b.dataset.catadd,null));document.querySelectorAll('[data-catedit]').forEach(b=>b.onclick=()=>{const c=db.categories.find(c=>c.id===b.dataset.catedit);if(c)editCategory(c.kind,c.id)});document.querySelectorAll('[data-catdelete]').forEach(b=>b.onclick=()=>deleteCategory(b.dataset.catdelete));if($('openBalance'))$('openBalance').onclick=editOpening;document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openCommitment(null,b.dataset.edit));document.querySelectorAll('[data-abono]').forEach(b=>b.onclick=()=>openPayment(b.dataset.abono));document.querySelectorAll('[data-checkpay]').forEach(b=>b.onclick=()=>finishPayment(b.dataset.checkpay));document.querySelectorAll('[data-adjustpay]').forEach(b=>b.onclick=()=>openPaymentAdjustment(b.dataset.adjustpay));document.querySelectorAll('[data-reverse]').forEach(b=>b.onclick=()=>reverse(b.dataset.reverse));if($('addBudget'))$('addBudget').onclick=()=>openBudget(null);document.querySelectorAll('[data-budgetedit]').forEach(b=>b.onclick=()=>openBudget(b.dataset.budgetedit));document.querySelectorAll('[data-budgetspend]').forEach(b=>b.onclick=()=>recordBudgetExpense(b.dataset.budgetspend));document.querySelectorAll('[data-budgetdetail]').forEach(b=>b.onclick=()=>detailBudget(b.dataset.budgetdetail));if($('reviewCarryovers'))$('reviewCarryovers').onclick=reviewCarryovers;document.querySelectorAll('[data-carrypay]').forEach(b=>b.onclick=()=>payCarryover(b.dataset.carrypay));if($('closeMonth'))$('closeMonth').onclick=()=>{if(db.monthClosed[month]){if(!confirm('¿Reabrir el mes para registrar cambios?'))return;delete db.monthClosed[month];logging('Mes reabierto',{month})}else{if(!confirm('¿Cerrar este mes? No podrás registrar movimientos hasta reabrirlo.'))return;db.monthClosed[month]={closedAt:new Date().toISOString(),snapshot:summary()};logging('Mes cerrado',{month})}persist();render()};if($('export'))$('export').onclick=exportData;if($('import'))$('import').onclick=()=>window.AndroidBackup?.importData?window.AndroidBackup.importData():$('backupFile').click();if($('wipe'))$('wipe').onclick=()=>{if(confirm('¿Borrar definitivamente todos los datos locales de prueba? Exporta primero un respaldo.')){db={schema:20,commitments:[],transactions:[],monthClosed:{},audit:[],paymentChecks:{},categories:DEFAULT_CATEGORIES.map(c=>({...c,id:uuid()})),opening:null,carryovers:[]};persist();render()}}}
 
 function moneyDisplay(value){
  const clean=String(value??'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');
@@ -790,6 +864,8 @@ function validateBackup(v){
  (v.paymentChecks!==undefined&&(!v.paymentChecks||typeof v.paymentChecks!=='object'||Array.isArray(v.paymentChecks))))throw Error('Estructura del respaldo incompatible.');
  if(v.openingHistory!==undefined&&(!Array.isArray(v.openingHistory)||v.openingHistory.length>5000))throw Error('Historial de apertura incompatible.');
  if(v.opening!==undefined&&v.opening!==null&&(!v.opening||typeof v.opening!=='object'||!parseDateInput(v.opening.date||((v.opening.month||'')+'-01'))||!Number.isSafeInteger(v.opening.amount)||v.opening.amount<0))throw Error('Saldo de apertura incompatible.');
+ if(v.carryovers!==undefined&&(!Array.isArray(v.carryovers)||v.carryovers.length>10000))throw Error('Traslados de pendientes incompatibles.');
+ for(const x of v.carryovers||[]){if(!x||typeof x.id!=='string'||typeof x.commitmentId!=='string'||!/^\d{4}-\d{2}$/.test(x.sourceMonth||'')||!/^\d{4}-\d{2}$/.test(x.targetMonth||'')||x.targetMonth<=x.sourceMonth||!Number.isSafeInteger(x.amount)||x.amount<=0)throw Error('Traslado de obligación inválido.');}
  const arrays=[v.commitments,v.transactions,v.audit,v.categories||[],v.budgets||[]];
  if(arrays.some(a=>a.length>100000))throw Error('El respaldo excede el número seguro de registros.');
  if(JSON.stringify(v).length>5000000)throw Error('El archivo supera el tamaño admitido.');
