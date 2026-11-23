@@ -55,6 +55,8 @@ final class LicenseAccountManager {
         app=FirebaseApp.initializeApp(activity,options,"pagocheck-license");
       }
       auth=FirebaseAuth.getInstance(app);
+      // Solicitar a Firebase los correos y pantallas de autenticación en español.
+      auth.setLanguageCode("es");
       // Nunca aceptar direcciones HTTP ni destinos que incluyan credenciales.
       if(address.startsWith("https://")){
         URL url=new URL(address);
