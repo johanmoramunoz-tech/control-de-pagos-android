@@ -354,11 +354,23 @@ function sourcePendingFor(targetMonth){
   .map(c=>({c,sourceMonth:prev,amount:outstandingFromMonth(c,prev)}));
 }
 function carryoverPanel(){
- const prior=sourcePendingFor(month);
- if(!prior.length)return '';
- return '<div class="banner"><strong>Revisión de cambio de mes:</strong> '+prior.length+
- ' pago(s) del mes anterior aún no confirmados. Selecciona los que realmente debas arrastrar. No se registrarán como egreso por esta acción.'+
- '<div class="bottom"><button type="button" class="button outline" id="reviewCarryovers">Revisar pendientes de '+safe(previousMonthOf(month))+'</button></div></div>';
+ const pending=carryList(),candidates=sourcePendingFor(month),prev=previousMonthOf(month);
+ const priorCommitments=db.commitments.filter(c=>c.kind==='expense'&&!c.budgetManaged&&c.start<=prev&&(!c.end||c.end>=prev));
+ let html='<section class="panel" aria-label="Pendientes de meses anteriores"><h2 style="margin-top:0">Pendientes de meses anteriores</h2>';
+ if(pending.length){
+  const total=pending.reduce((n,x)=>n+carryRemaining(x),0);
+  html+='<p class="muted">'+pending.length+' obligación(es) arrastrada(s) · pendiente total '+crc(total)+'. Cada registro indica el mes de origen para diferenciarlo del recibo actual.</p>'+carriedCards();
+ }
+ if(candidates.length){
+  html+='<div class="banner"><strong>Revisión pendiente:</strong> '+candidates.length+' compromiso(s) de '+safe(prev)+
+   ' todavía sin confirmación completa. Revisa si corresponde trasladarlos o si simplemente faltó registrar el pago. No se agregan automáticamente como deuda.'+
+   '<div class="bottom"><button type="button" class="button outline" id="reviewCarryovers">Revisar pagos de '+safe(prev)+'</button></div></div>';
+ }else if(!pending.length){
+  html+='<p class="muted">'+(priorCommitments.length?
+   'No se detectan pagos pendientes de meses anteriores para trasladar. Revisa el historial si hubo pagos no registrados.':
+   'No hay obligaciones anteriores registradas para este período.')+'</p>';
+ }
+ return html+'</section>';
 }
 function carriedCards(){
  const pending=carryList();
@@ -429,7 +441,7 @@ function monthlyBoard(arr){
  const expenses=arr.filter(c=>c.kind==='expense'&&!c.budgetManaged),pending=expenses.filter(c=>!checked(c)),done=expenses.filter(checked);
  pending.sort((a,b)=>(Number(a.planned||a.due)||32)-(Number(b.planned||b.due)||32));
  done.sort((a,b)=>a.name.localeCompare(b.name,'es'));
- return '<div class="payment-columns"><section class="payment-group"><div class="payment-group-title"><strong>Pendientes</strong><span>'+(pending.length+carryList().length)+'</span></div>'+carriedCards()+monthlyCards(pending,'pending')+'</section>'+
+ return '<div class="payment-columns"><section class="payment-group"><div class="payment-group-title"><strong>Pendientes de este mes</strong><span>'+pending.length+'</span></div>'+monthlyCards(pending,'pending')+'</section>'+
  '<section class="payment-group"><div class="payment-group-title paid-title"><strong>Realizados</strong><span>'+done.length+'</span></div>'+monthlyCards(done,'done')+'</section></div>';
 }
 
@@ -500,7 +512,7 @@ function bindPremiumRibbon(){
 function render(){const s=summary();$('currentMonth').textContent=new Date(Number(month.slice(0,4)),Number(month.slice(5,7))-1,1).toLocaleDateString('es-CR',{month:'long',year:'numeric'});const available=balanceAt(month);$('headerBalanceValue').textContent=available===null?'Saldo inicial pendiente':crc(available);$('headerBalance').classList.toggle('negative',available!==null&&available<0);document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));let html='';if(tab==='home'){
  const chooser='<div class="viewchooser"><strong>Resumen financiero</strong><div><button type="button" class="modebtn '+(viewMode==='numeric'?'active':'')+'" data-viewmode="numeric">Números</button> <button type="button" class="modebtn '+(viewMode==='graphic'?'active':'')+'" data-viewmode="graphic">Gráficos</button></div></div>';
  const numbers=`<div class="grid">${tile('Ingresos proyectados',s.plannedInc)}${tile('Gastos proyectados',s.plannedExp)}${tile('Ingresos recibidos',s.realInc)}${tile('Gastos ejecutados',s.realExp)}${tile('Balance mensual',s.realInc-s.realExp)}${db.opening?tile('Saldo disponible estimado',balanceAt(month)):tile('Saldo inicial pendiente',0)}${tile('Monto pendiente',s.pending)}<div class="tile"><small>Pagos sin confirmar</small><strong>${s.pendingCount}</strong></div></div><p class="muted">El saldo disponible es estimado y no está conciliado con las cuentas bancarias.</p>`;
- html=budgetHealthNotice(s)+`${section('Pagos del mes','+ Añadir compromiso','expense')}${carryoverPanel()}${monthlyBoard(s.c)}`+chooser+(viewMode==='numeric'?numbers:graphicsFor(s))+`${section('Movimientos recientes')}${listTransactions(s.tx.slice(-5))}`;
+ html=budgetHealthNotice(s)+`${carryoverPanel()}${section('Pagos de este mes','+ Añadir compromiso','expense')}${monthlyBoard(s.c)}`+chooser+(viewMode==='numeric'?numbers:graphicsFor(s))+`${section('Movimientos recientes')}${listTransactions(s.tx.slice(-5))}`;
 }
 if(tab==='obligations'){html=`${section('Ingresos proyectados','+ Ingreso','income')}${listCommitments(s.c.filter(c=>c.kind==='income'))}${section('Gastos obligatorios','+ Gasto','expense')}${listCommitments(s.c.filter(c=>c.kind==='expense'))}`}
 if(tab==='budgets'){html=budgetHealthNotice(s)+section('Presupuestos de consumo')+'<p class="muted">Controla compras recurrentes por categoría y subcategoría. Cada movimiento real reduce el disponible sin crear un segundo gasto en el resumen general.</p><div class="bottom"><button class="button" id="addBudget">+ Nuevo presupuesto</button></div>'+budgetList()}
