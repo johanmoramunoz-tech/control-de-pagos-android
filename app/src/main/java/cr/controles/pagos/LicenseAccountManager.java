@@ -69,7 +69,9 @@ final class LicenseAccountManager {
     }
     publish();
   }
-  boolean config  private void notifyAccount(String info){
+  boolean configured(){return auth!=null;}
+  void status(){publish();}
+  private void notifyAccount(String info){
     message=info;
     publish();
     activity.runOnUiThread(()->new AlertDialog.Builder(activity)
