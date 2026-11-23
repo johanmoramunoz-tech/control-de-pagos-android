@@ -93,7 +93,13 @@ final class LicenseAccountManager {
         default: return "Firebase devolvió el código: "+code+".";
       }
     }
-    return "No se completó la solicitud. Revisa la conexión y la configuración de Firebase.";
+    if(error instanceof com.google.firebase.FirebaseNetworkException)
+      return "Firebase no pudo comunicarse con el servidor (FirebaseNetworkException). Comprueba Internet, DNS privado y restricciones de red.";
+    if(error instanceof com.google.firebase.FirebaseTooManyRequestsException)
+      return "Firebase limitó los intentos temporalmente (FirebaseTooManyRequestsException).";
+    if(error!=null)
+      return "La solicitud falló con el tipo de error: "+error.getClass().getSimpleName()+". Comunica este nombre para revisar la causa.";
+    return "Firebase no devolvió información del error. Revisa configuración y conexión.";
   }
   void showLogin(boolean register){
     if(auth==null){notifyAccount("Firebase no está configurado en esta compilación.");return;}
