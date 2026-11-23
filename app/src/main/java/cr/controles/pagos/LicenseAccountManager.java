@@ -79,22 +79,41 @@ final class LicenseAccountManager {
       .setMessage(info)
       .setPositiveButton("Entendido",null).show());
   }
+  private String safeFirebaseCode(Throwable error){
+    Throwable current=error;
+    for(int depth=0;current!=null&&depth<5;depth++,current=current.getCause()){
+      if(current instanceof FirebaseAuthException){
+        String code=((FirebaseAuthException)current).getErrorCode();
+        if(code!=null&&code.matches("[A-Z0-9_\\-]{3,80}"))return code;
+      }
+      if(current instanceof com.google.firebase.FirebaseNetworkException)return "NETWORK";
+      if(current instanceof com.google.firebase.FirebaseTooManyRequestsException)return "RATE_LIMIT";
+      String description=current.getMessage();
+      if(description==null)continue;
+      java.util.regex.Matcher token=java.util.regex.Pattern
+        .compile("\\[\\s*([A-Z][A-Z0-9_\\-]{2,79})\\s*\\]")
+        .matcher(description);
+      if(token.find())return token.group(1);
+      String normalized=description.toUpperCase(java.util.Locale.ROOT);
+      if(normalized.contains("FIREBASE INSTALLATIONS")||normalized.contains("INSTALLATION AUTH"))
+        return "FIREBASE_INSTALLATIONS";
+      if(normalized.contains("API KEY")||normalized.contains("API_KEY"))
+        return "API_KEY_CONFIGURATION";
+      if(normalized.contains("CONFIGURATION")||normalized.contains("PROJECT NOT FOUND"))
+        return "PROJECT_CONFIGURATION";
+      if(normalized.contains("NETWORK")||normalized.contains("UNABLE TO RESOLVE HOST")||
+         normalized.contains("TIMEOUT")||normalized.contains("CONNECTION"))
+        return "NETWORK_OR_DNS";
+      if(normalized.contains("CERTIFICATE")||normalized.contains("SSL")||normalized.contains("TLS"))
+        return "TLS_CERTIFICATE";
+      if(normalized.contains("PLAY INTEGRITY")||normalized.contains("RECAPTCHA"))
+        return "APP_VERIFICATION";
+    }
+    return "UNKNOWN";
+  }
   private void recordAuthFailure(String operation,Exception error){
     String category=error==null?"UNKNOWN":error.getClass().getSimpleName();
-    String code="UNKNOWN";
-    if(error instanceof FirebaseAuthException)
-      code=((FirebaseAuthException)error).getErrorCode();
-    else if(error instanceof com.google.firebase.FirebaseNetworkException)
-      code="NETWORK";
-    else if(error instanceof com.google.firebase.FirebaseTooManyRequestsException)
-      code="RATE_LIMIT";
-    else if(error!=null&&error.getMessage()!=null){
-      java.util.regex.Matcher match=java.util.regex.Pattern
-        .compile("\\[([A-Z][A-Z0-9_\\-]{2,79})\\]")
-        .matcher(error.getMessage());
-      if(match.find())code=match.group(1);
-    }
-    SupportDiagnostics.record(activity,"AUTH",operation,category,code);
+    SupportDiagnostics.record(activity,"AUTH",operation,category,safeFirebaseCode(error));
   }
   private String authError(Exception error){
     if(error instanceof FirebaseAuthException){
@@ -127,6 +146,9 @@ final class LicenseAccountManager {
           if(detail.contains(known))return "Firebase rechazó el registro. Código: "+known+".";
         }
       }
+      String safeCode=safeFirebaseCode(error);
+      if(!"UNKNOWN".equals(safeCode))
+        return "Error de Firebase: "+safeCode+". Consulta el informe técnico para el diagnóstico.";
       return "Firebase devolvió "+error.getClass().getSimpleName()+
         " sin código identificable. Es necesario revisar el registro de diagnóstico de Android.";
     }
