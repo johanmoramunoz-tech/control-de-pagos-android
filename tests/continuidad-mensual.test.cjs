@@ -52,3 +52,13 @@ test('historial de traslados se conserva en los respaldos',()=>{
  assert.match(html,/v\.carryovers!==undefined/);
  assert.match(html,/db=v;migrate\(\)/);
 });
+
+test('separación visual entre períodos',()=>{
+ assert.match(html,/<strong>Pendientes de este mes<\/strong>/);
+ assert.match(html,/Pendientes de meses anteriores/);
+ assert.match(html,/function carryoverPanel\(\)/);
+ assert.match(html,/function carriedCards\(\)/);
+ assert.match(html,/No se detectan pagos pendientes de meses anteriores/);
+ assert.match(html,/No hay obligaciones anteriores registradas/);
+ assert.match(html,/No se agregan automáticamente como deuda/);
+});
