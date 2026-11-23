@@ -199,6 +199,15 @@ public class MainActivity extends Activity {
     @JavascriptInterface public void register(){
       runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.showLogin(true);});
     }
+    @JavascriptInterface public void resetPassword(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.resetPassword();});
+    }
+    @JavascriptInterface public void resendVerification(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.resendVerification();});
+    }
+    @JavascriptInterface public void refreshVerification(){
+      runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.refreshVerification();});
+    }
     @JavascriptInterface public void signOut(){
       runOnUiThread(()->{if(licenseAccount!=null)licenseAccount.signOut();});
     }
