@@ -196,6 +196,73 @@ final class LicenseAccountManager {
         }).setNegativeButton("Cancelar",null).show();
     });
   }
+  void resetPassword(){
+    if(auth==null){notifyAccount("Firebase no está configurado.");return;}
+    activity.runOnUiThread(()->{
+      EditText email=new EditText(activity);
+      email.setHint("Correo de tu cuenta");
+      email.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+      FirebaseUser current=auth.getCurrentUser();
+      if(current!=null&&current.getEmail()!=null)email.setText(current.getEmail());
+      int pad=(int)(20*activity.getResources().getDisplayMetrics().density);
+      LinearLayout layout=new LinearLayout(activity);
+      layout.setPadding(pad,pad,pad,pad);
+      layout.addView(email);
+      new AlertDialog.Builder(activity).setTitle("Restablecer contraseña")
+        .setMessage("Te enviaremos un enlace de recuperación si el correo corresponde a una cuenta válida.")
+        .setView(layout)
+        .setPositiveButton("Enviar enlace",(dialog,which)->{
+          String address=email.getText().toString().trim();
+          if(!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()){
+            notifyAccount("Introduce una dirección de correo válida.");return;
+          }
+          message="Solicitando enlace de recuperación...";publish();
+          auth.sendPasswordResetEmail(address).addOnCompleteListener(activity,result->{
+            if(result.isSuccessful())notifyAccount("Si existe una cuenta para ese correo, recibirás instrucciones para restablecer la contraseña. Revisa Spam.");
+            else{
+              recordAuthFailure("RESET_PASSWORD",result.getException());
+              if(result.getException() instanceof com.google.firebase.auth.FirebaseAuthInvalidUserException)
+                notifyAccount("Si existe una cuenta para ese correo, recibirás instrucciones. Revisa también Spam.");
+              else notifyAccount(authError(result.getException()));
+            }
+          });
+        }).setNegativeButton("Cancelar",null).show();
+    });
+  }
+  void resendVerification(){
+    if(auth==null){notifyAccount("Firebase no está configurado.");return;}
+    FirebaseUser current=auth.getCurrentUser();
+    if(current==null){notifyAccount("Inicia sesión para reenviar la verificación.");return;}
+    current.reload().addOnCompleteListener(activity,reloaded->{
+      if(!reloaded.isSuccessful()){
+        recordAuthFailure("REFRESH_VERIFICATION",reloaded.getException());
+        notifyAccount(authError(reloaded.getException()));return;
+      }
+      FirebaseUser refreshed=auth.getCurrentUser();
+      if(refreshed==null){notifyAccount("La sesión ha terminado. Inicia sesión nuevamente.");return;}
+      if(refreshed.isEmailVerified()){message="Correo verificado correctamente.";publish();notifyAccount(message);return;}
+      refreshed.sendEmailVerification().addOnCompleteListener(activity,result->{
+        if(result.isSuccessful())notifyAccount("Se solicitó un nuevo correo de verificación. Revisa Recibidos y Spam.");
+        else{recordAuthFailure("RESEND_VERIFICATION",result.getException());notifyAccount(authError(result.getException()));}
+      });
+    });
+  }
+  void refreshVerification(){
+    if(auth==null){notifyAccount("Firebase no está configurado.");return;}
+    FirebaseUser user=auth.getCurrentUser();
+    if(user==null){notifyAccount("Inicia sesión para revisar el estado de verificación.");return;}
+    user.reload().addOnCompleteListener(activity,result->{
+      if(!result.isSuccessful()){
+        recordAuthFailure("REFRESH_VERIFICATION",result.getException());
+        notifyAccount(authError(result.getException()));return;
+      }
+      FirebaseUser refreshed=auth.getCurrentUser();
+      if(refreshed==null){notifyAccount("La sesión ha terminado. Inicia sesión nuevamente.");return;}
+      message=refreshed.isEmailVerified()?"Tu correo está verificado.":"El correo aún no está verificado. Revisa el mensaje de Firebase.";
+      publish();
+      notifyAccount(message);
+    });
+  }
   void signOut(){
     authRevision++;
     if(auth!=null)auth.signOut();
