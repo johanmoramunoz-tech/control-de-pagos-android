@@ -10,6 +10,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.FirebaseAuthException;
 import java.net.URL;
 import javax.net.ssl.HttpsURLConnection;
 import java.io.InputStream;
@@ -68,10 +69,32 @@ final class LicenseAccountManager {
     }
     publish();
   }
-  boolean configured(){return auth!=null;}
-  void status(){publish();}
+  boolean config  private void notifyAccount(String info){
+    message=info;
+    publish();
+    activity.runOnUiThread(()->new AlertDialog.Builder(activity)
+      .setTitle("PagoCheck IA · Cuenta")
+      .setMessage(info)
+      .setPositiveButton("Entendido",null).show());
+  }
+  private String authError(Exception error){
+    if(error instanceof FirebaseAuthException){
+      String code=((FirebaseAuthException)error).getErrorCode();
+      switch(code){
+        case "ERROR_EMAIL_ALREADY_IN_USE": return "Este correo ya está registrado. Utiliza Iniciar sesión.";
+        case "ERROR_INVALID_EMAIL": return "El correo electrónico no es válido.";
+        case "ERROR_WEAK_PASSWORD": return "La contraseña no cumple los requisitos de Firebase.";
+        case "ERROR_OPERATION_NOT_ALLOWED": return "El acceso por correo no está habilitado en Firebase.";
+        case "ERROR_NETWORK_REQUEST_FAILED": return "Sin conexión con Firebase. Verifica Internet.";
+        case "ERROR_TOO_MANY_REQUESTS": return "Demasiados intentos. Prueba más tarde.";
+        case "ERROR_INVALID_API_KEY": return "La clave de Firebase no es válida.";
+        default: return "Firebase devolvió el código: "+code+".";
+      }
+    }
+    return "No se completó la solicitud. Revisa la conexión y la configuración de Firebase.";
+  }
   void showLogin(boolean register){
-    if(auth==null){publish();return;}
+    if(auth==null){notifyAccount("Firebase no está configurado en esta compilación.");return;}
     activity.runOnUiThread(()->{
       LinearLayout layout=new LinearLayout(activity);layout.setOrientation(LinearLayout.VERTICAL);
       int pad=(int)(20*activity.getResources().getDisplayMetrics().density);
@@ -85,24 +108,34 @@ final class LicenseAccountManager {
         .setView(layout)
         .setPositiveButton(register?"Crear cuenta":"Entrar",(d,w)->{
           String address=email.getText().toString().trim(),secret=password.getText().toString();
-          if(!address.contains("@")||secret.length()<8){message="Verifica el correo y la contraseña";publish();return;}
+          if(!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()||secret.length()<8){
+            notifyAccount("Introduce un correo válido y una contraseña de 8 caracteres o más.");return;
+          }
+          message=register?"Creando cuenta en Firebase...":"Iniciando sesión en Firebase...";
+          publish();
           if(register){
             auth.createUserWithEmailAndPassword(address,secret).addOnCompleteListener(activity,result->{
-              if(result.isSuccessful()){
-                FirebaseUser user=auth.getCurrentUser();
-                if(user!=null)user.sendEmailVerification();
-                message="Cuenta creada. Verifica tu correo antes de usar Premium.";
-              }else message="No fue posible crear la cuenta. Comprueba los datos o inténtalo de nuevo.";
-              licenseVerified=false;publish();
+              if(!result.isSuccessful()){licenseVerified=false;notifyAccount(authError(result.getException()));return;}
+              FirebaseUser user=auth.getCurrentUser();
+              licenseVerified=false;
+              if(user==null){notifyAccount("Registro aceptado, pero no se pudo recuperar la sesión. Verifica Usuarios en Firebase.");return;}
+              user.sendEmailVerification().addOnCompleteListener(activity,verification->{
+                if(verification.isSuccessful())notifyAccount("Cuenta creada. Correo de verificación enviado. Revisa también Spam. Esto no activa Premium.");
+                else notifyAccount("Cuenta creada, pero no pudo enviarse el correo de verificación. "+authError(verification.getException()));
+              });
             });
           }else{
             auth.signInWithEmailAndPassword(address,secret).addOnCompleteListener(activity,result->{
-              message=result.isSuccessful()?"Sesión iniciada; comprueba tu correo y tu licencia.":"No se pudo iniciar sesión. Comprueba correo y contraseña.";
-              licenseVerified=false;publish();
-              if(result.isSuccessful())refreshLicense();
+              licenseVerified=false;
+              if(!result.isSuccessful()){notifyAccount(authError(result.getException()));return;}
+              notifyAccount("Sesión iniciada. Premium requiere una licencia validada.");
+              refreshLicense();
             });
           }
         }).setNegativeButton("Cancelar",null).show();
+    });
+  }
+setNegativeButton("Cancelar",null).show();
     });
   }
   void signOut(){
