@@ -77,7 +77,7 @@ jobs:
       - name: Adjuntar AAB para subir manualmente a Play Console
         uses: actions/upload-artifact@v4
         with:
-          name: PagoCheck-IA-v25-AAB-Play-Interna
+          name: PagoCheck-IA-v26-AAB-Play-Interna
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
