@@ -18,8 +18,8 @@ android {
   applicationId 'cr.controles.pagos'
   minSdk 24
   targetSdk 36
-  versionCode 25
-  versionName '25.0-prueba-interna'
+  versionCode 26
+  versionName '26.0-asistente-inicial'
  }
  signingConfigs {
   if(uploadKeyPath && uploadStorePass && uploadKeyAlias && uploadKeyPass) {
